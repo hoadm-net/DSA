@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Tìm kiếm nhị phân</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --found: #2f9e44;
+    --miss: #e03131;
+    --current: #f08c00;
+    --visited: #dee2e6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 160px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .note { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .array-view {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 24px 0 8px;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .box {
+    width: 52px;
+    height: 52px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1rem;
+    background: #fff;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  }
+  .idx { font-size: 0.75rem; color: var(--muted); }
+  .pointer { font-size: 0.72rem; font-weight: 700; color: var(--accent); height: 14px; }
+  .box.current { border-color: var(--current); background: #fff3bf; transform: scale(1.08); }
+  .box.visited { border-color: var(--visited); background: #f1f3f5; color: var(--muted); opacity: 0.5; }
+  .box.found { border-color: var(--found); background: #d3f9d8; }
+  .status {
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f3f5;
+    min-height: 20px;
+  }
+  .status.found { background: #d3f9d8; color: #2b8a3e; }
+  .status.miss { background: #ffe3e3; color: #c92a2a; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1>Tìm kiếm nhị phân (Binary Search)</h1>
+  <p class="subtitle">So sánh khóa cần tìm với phần tử giữa, loại bỏ một nửa phạm vi tìm kiếm sau mỗi lần so sánh.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field" style="flex: 2; min-width: 260px;">
+        <label>Mảng (các số cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="arrayInput" value="1, 3, 6, 8, 9, 15, 19, 22, 27, 31">
+      </div>
+      <div class="field" style="max-width: 120px;">
+        <label>Giá trị cần tìm</label>
+        <input type="number" id="targetInput" value="22">
+      </div>
+      <button class="primary" id="applyBtn">Tạo mảng</button>
+    </div>
+    <div class="note">Mảng sẽ tự động được sắp xếp tăng dần vì tìm kiếm nhị phân yêu cầu dữ liệu đã sắp xếp.</div>
+    <div class="controls-row" style="margin-top: 10px;">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <button id="resetBtn">Reset</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1500" value="700" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="array-view" id="arrayView"></div>
+    <div class="status" id="statusBox">Nhấn "Từng bước" hoặc "Chạy tự động" để bắt đầu.</div>
+  </div>
+
+<script>
+  const arrayInput = document.getElementById('arrayInput');
+  const targetInput = document.getElementById('targetInput');
+  const applyBtn = document.getElementById('applyBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const arrayView = document.getElementById('arrayView');
+  const statusBox = document.getElementById('statusBox');
+
+  let arr = [];
+  let target = 0;
+  let low, high, mid;
+  let phase = 'compare'; // 'compare' -> tính mid & so sánh, 'narrow' -> thu hẹp phạm vi
+  let done = false;
+  let foundIndex = -1;
+  let autoTimer = null;
+
+  function parseArray() {
+    arr = arrayInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    arr.sort((a, b) => a - b);
+    arrayInput.value = arr.join(', ');
+    target = parseInt(targetInput.value, 10);
+  }
+
+  function renderArray() {
+    arrayView.innerHTML = '';
+    arr.forEach((v, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      let boxClass = 'box';
+      const inRange = i >= low && i <= high;
+      if (done && i === foundIndex) boxClass += ' found';
+      else if (!inRange) boxClass += ' visited';
+      else if (i === mid && phase === 'narrow') boxClass += ' current';
+
+      let pointers = [];
+      if (i === low) pointers.push('low');
+      if (i === high) pointers.push('high');
+      const pointerText = pointers.join('/');
+
+      cell.innerHTML = `
+        <div class="pointer">${pointerText}</div>
+        <div class="${boxClass}">${v}</div>
+        <div class="idx">${i}</div>
+      `;
+      arrayView.appendChild(cell);
+    });
+  }
+
+  function setStatus(text, type) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  function reset() {
+    stopAuto();
+    parseArray();
+    low = 0;
+    high = arr.length - 1;
+    mid = -1;
+    phase = 'compare';
+    done = false;
+    foundIndex = -1;
+    renderArray();
+    setStatus(`Sẵn sàng tìm kiếm giá trị ${target} trong mảng đã sắp xếp gồm ${arr.length} phần tử.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (done) return;
+
+    if (phase === 'compare') {
+      if (low > high) {
+        done = true;
+        renderArray();
+        setStatus(`Phạm vi [low, high] rỗng (low > high) → không tìm thấy giá trị ${target}.`, 'miss');
+        stopAuto();
+        stepBtn.disabled = true;
+        runBtn.disabled = true;
+        return;
+      }
+      mid = Math.floor((low + high) / 2);
+      if (arr[mid] === target) {
+        done = true;
+        foundIndex = mid;
+        renderArray();
+        setStatus(`A[mid] = A[${mid}] = ${target} → tìm thấy tại vị trí ${mid}!`, 'found');
+        stopAuto();
+        stepBtn.disabled = true;
+        runBtn.disabled = true;
+        return;
+      }
+      const cmp = arr[mid] < target ? '<' : '>';
+      setStatus(`mid = ${mid} → A[mid] = ${arr[mid]} ${cmp} ${target}. Sẽ thu hẹp phạm vi ở bước tiếp theo.`);
+      phase = 'narrow';
+      renderArray();
+    } else {
+      if (arr[mid] < target) {
+        low = mid + 1;
+        setStatus(`A[mid] < ${target} → khóa chỉ có thể ở nửa phải. Cập nhật low = ${low}.`);
+      } else {
+        high = mid - 1;
+        setStatus(`A[mid] > ${target} → khóa chỉ có thể ở nửa trái. Cập nhật high = ${high}.`);
+      }
+      phase = 'compare';
+      renderArray();
+    }
+  }
+
+  function stopAuto() {
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  }
+
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (done) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  applyBtn.addEventListener('click', reset);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+  resetBtn.addEventListener('click', reset);
+
+  reset();
+</script>
+</body>
+</html>

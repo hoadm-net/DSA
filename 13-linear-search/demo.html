@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Tìm kiếm tuần tự</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --found: #2f9e44;
+    --miss: #e03131;
+    --current: #f08c00;
+    --visited: #dee2e6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 160px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .array-view {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 24px 0 8px;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .box {
+    width: 52px;
+    height: 52px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1rem;
+    background: #fff;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  }
+  .idx { font-size: 0.75rem; color: var(--muted); }
+  .box.current { border-color: var(--current); background: #fff3bf; transform: scale(1.08); }
+  .box.visited { border-color: var(--visited); background: #f1f3f5; color: var(--muted); }
+  .box.found { border-color: var(--found); background: #d3f9d8; }
+  .status {
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f3f5;
+    min-height: 20px;
+  }
+  .status.found { background: #d3f9d8; color: #2b8a3e; }
+  .status.miss { background: #ffe3e3; color: #c92a2a; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1>Tìm kiếm tuần tự (Linear Search)</h1>
+  <p class="subtitle">Duyệt lần lượt từng phần tử từ đầu đến cuối cho tới khi tìm thấy khóa cần tìm.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field" style="flex: 2; min-width: 260px;">
+        <label>Mảng (các số cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="arrayInput" value="8, 3, 15, 6, 22, 1, 19, 9">
+      </div>
+      <div class="field" style="max-width: 120px;">
+        <label>Giá trị cần tìm</label>
+        <input type="number" id="targetInput" value="19">
+      </div>
+      <button class="primary" id="applyBtn">Tạo mảng</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <button id="resetBtn">Reset</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="100" max="1200" value="500" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="array-view" id="arrayView"></div>
+    <div class="status" id="statusBox">Nhấn "Từng bước" hoặc "Chạy tự động" để bắt đầu.</div>
+  </div>
+
+<script>
+  const arrayInput = document.getElementById('arrayInput');
+  const targetInput = document.getElementById('targetInput');
+  const applyBtn = document.getElementById('applyBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const arrayView = document.getElementById('arrayView');
+  const statusBox = document.getElementById('statusBox');
+
+  let arr = [];
+  let target = 0;
+  let index = 0;
+  let done = false;
+  let autoTimer = null;
+
+  function parseArray() {
+    arr = arrayInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    target = parseInt(targetInput.value, 10);
+  }
+
+  function renderArray() {
+    arrayView.innerHTML = '';
+    arr.forEach((v, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      let boxClass = 'box';
+      if (i < index) boxClass += ' visited';
+      if (i === index && !done) boxClass += ' current';
+      if (done && i === index && arr[i] === target) boxClass += ' found';
+      cell.innerHTML = `<div class="${boxClass}">${v}</div><div class="idx">${i}</div>`;
+      arrayView.appendChild(cell);
+    });
+  }
+
+  function setStatus(text, type) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  function reset() {
+    stopAuto();
+    parseArray();
+    index = 0;
+    done = false;
+    renderArray();
+    setStatus(`Sẵn sàng tìm kiếm giá trị ${target} trong mảng gồm ${arr.length} phần tử.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (done) return;
+    if (index >= arr.length) {
+      done = true;
+      renderArray();
+      setStatus(`Đã duyệt hết mảng, không tìm thấy giá trị ${target}.`, 'miss');
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+      return;
+    }
+    if (arr[index] === target) {
+      done = true;
+      renderArray();
+      setStatus(`Tìm thấy ${target} tại vị trí ${index}!`, 'found');
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+      return;
+    }
+    setStatus(`So sánh A[${index}] = ${arr[index]} với ${target} → không khớp, tiếp tục.`);
+    index++;
+    renderArray();
+  }
+
+  function stopAuto() {
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  }
+
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (done) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  applyBtn.addEventListener('click', reset);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+  resetBtn.addEventListener('click', reset);
+
+  reset();
+</script>
+</body>
+</html>

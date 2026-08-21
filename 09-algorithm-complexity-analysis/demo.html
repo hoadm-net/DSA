@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>So sánh tốc độ tăng Big-O</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .controls { width: 260px; flex-shrink: 0; }
+  .chart-panel { flex: 1; min-width: 320px; }
+  .control-group { margin-bottom: 18px; }
+  .control-group label.title {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+  }
+  input[type="range"] { width: 100%; }
+  .n-value { font-weight: 600; color: var(--accent); }
+  .curve-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.9rem;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .radio-row { display: flex; gap: 14px; font-size: 0.9rem; }
+  canvas { width: 100%; height: 420px; display: block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  td.val { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <h1>So sánh tốc độ tăng của các mức Big-O</h1>
+  <p class="subtitle">Kéo thanh trượt n để xem số phép toán tăng nhanh thế nào giữa các độ phức tạp khác nhau.</p>
+
+  <div class="layout">
+    <div class="panel controls">
+      <div class="control-group">
+        <label class="title">Kích thước dữ liệu n = <span class="n-value" id="nLabel">20</span></label>
+        <input type="range" id="nSlider" min="1" max="40" value="20" step="1">
+      </div>
+
+      <div class="control-group">
+        <label class="title">Thang đo trục Y</label>
+        <div class="radio-row">
+          <label><input type="radio" name="scale" value="linear" checked> Tuyến tính</label>
+          <label><input type="radio" name="scale" value="log"> Logarit</label>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="title">Hiển thị đường</label>
+        <div id="toggles"></div>
+      </div>
+    </div>
+
+    <div class="panel chart-panel">
+      <canvas id="chart" width="800" height="420"></canvas>
+      <table>
+        <thead>
+          <tr><th>Độ phức tạp</th><th>Số phép toán tại n hiện tại</th></tr>
+        </thead>
+        <tbody id="valueTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  const complexities = [
+    { name: 'O(1)',        color: '#2f9e44', visible: true,  fn: n => 1 },
+    { name: 'O(log n)',    color: '#1971c2', visible: true,  fn: n => n <= 1 ? 0 : Math.log2(n) },
+    { name: 'O(n)',        color: '#e8590c', visible: true,  fn: n => n },
+    { name: 'O(n log n)',  color: '#ae3ec9', visible: true,  fn: n => n <= 1 ? 0 : n * Math.log2(n) },
+    { name: 'O(n²)',  color: '#e03131', visible: true,  fn: n => n * n },
+    { name: 'O(2ⁿ)',  color: '#5c5f66', visible: false, fn: n => Math.pow(2, n) },
+  ];
+
+  const nSlider = document.getElementById('nSlider');
+  const nLabel = document.getElementById('nLabel');
+  const togglesEl = document.getElementById('toggles');
+  const valueTable = document.getElementById('valueTable');
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  let scaleMode = 'linear';
+
+  function buildToggles() {
+    complexities.forEach((c, i) => {
+      const row = document.createElement('label');
+      row.className = 'curve-toggle';
+      row.innerHTML = `
+        <input type="checkbox" data-i="${i}" ${c.visible ? 'checked' : ''}>
+        <span class="dot" style="background:${c.color}"></span>
+        <span>${c.name}</span>
+      `;
+      togglesEl.appendChild(row);
+    });
+    togglesEl.addEventListener('change', e => {
+      const i = e.target.getAttribute('data-i');
+      if (i !== null) {
+        complexities[i].visible = e.target.checked;
+        draw();
+      }
+    });
+  }
+
+  function formatNumber(v) {
+    if (v >= 1e6) return v.toExponential(2);
+    return Math.round(v).toLocaleString('vi-VN');
+  }
+
+  function draw() {
+    const nMax = parseInt(nSlider.value, 10);
+    nLabel.textContent = nMax;
+
+    const W = canvas.width, H = canvas.height;
+    const padL = 60, padB = 34, padT = 16, padR = 16;
+    ctx.clearRect(0, 0, W, H);
+
+    const visible = complexities.filter(c => c.visible);
+    // compute max y among visible curves across n=1..nMax
+    let maxY = 1;
+    visible.forEach(c => {
+      for (let n = 1; n <= nMax; n++) {
+        maxY = Math.max(maxY, c.fn(n));
+      }
+    });
+
+    function yScale(v) {
+      if (scaleMode === 'log') {
+        const logMax = Math.log10(maxY + 1);
+        const logV = Math.log10(v + 1);
+        return H - padB - (logV / logMax) * (H - padT - padB);
+      }
+      return H - padB - (v / maxY) * (H - padT - padB);
+    }
+    function xScale(n) {
+      return padL + ((n - 1) / Math.max(1, nMax - 1)) * (W - padL - padR);
+    }
+
+    // axes
+    ctx.strokeStyle = '#d0d3da';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, H - padB);
+    ctx.lineTo(W - padR, H - padB);
+    ctx.stroke();
+
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('n = ' + nMax, W - padR - 40, H - padB + 20);
+    ctx.fillText('n = 1', padL - 4, H - padB + 20);
+    ctx.fillText('số phép toán', 4, padT + 4);
+
+    // curves
+    visible.forEach(c => {
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let n = 1; n <= nMax; n++) {
+        const x = xScale(n);
+        const y = yScale(c.fn(n));
+        if (n === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+
+    // value table
+    valueTable.innerHTML = '';
+    complexities.forEach(c => {
+      if (!c.visible) return;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><span class="dot" style="display:inline-block;background:${c.color};margin-right:6px;vertical-align:middle;"></span>${c.name}</td>
+                      <td class="val">${formatNumber(c.fn(nMax))}</td>`;
+      valueTable.appendChild(tr);
+    });
+  }
+
+  nSlider.addEventListener('input', draw);
+  document.querySelectorAll('input[name="scale"]').forEach(r => {
+    r.addEventListener('change', e => { scaleMode = e.target.value; draw(); });
+  });
+
+  buildToggles();
+  draw();
+</script>
+</body>
+</html>

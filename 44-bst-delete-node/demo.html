@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Xóa node khỏi BST</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --miss: #e03131;
+    --successor: #ae3ec9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 140px; }
+  .field.wide { flex: 2; min-width: 260px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.danger { background: var(--miss); color: #fff; border-color: var(--miss); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .tree-scroll { overflow-x: auto; min-height: 60px; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Xóa node khỏi BST</h1>
+  <p class="subtitle">Tìm node cần xóa, xác định trường hợp (lá / 1 con / 2 con), rồi cập nhật liên kết tương ứng.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field wide">
+        <label>Dãy giá trị khởi tạo (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="valuesInput" value="8, 3, 10, 1, 6, 14, 4, 7, 13">
+      </div>
+      <button class="primary" id="buildBtn">Dựng lại cây</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị</label>
+        <input type="text" id="valueInput" value="3">
+      </div>
+      <button id="insertBtn">Insert (thêm để thử nghiệm)</button>
+      <button class="danger" id="deleteBtn">Delete</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1200" value="500" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Đang tìm kiếm</span>
+      <span><span class="dot" style="background:var(--miss)"></span> Node sẽ bị xóa</span>
+      <span><span class="dot" style="background:var(--successor)"></span> Successor (thế mạng)</span>
+      <span><span class="dot" style="background:var(--key)"></span> Node vừa thêm (Insert)</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tree-scroll"><svg id="treeSvg"></svg></div>
+    <div class="status" id="statusBox">Nhập dãy giá trị rồi nhấn "Dựng lại cây".</div>
+  </div>
+
+<script>
+  const valuesInput = document.getElementById('valuesInput');
+  const valueInput = document.getElementById('valueInput');
+  const buildBtn = document.getElementById('buildBtn');
+  const insertBtn = document.getElementById('insertBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const treeSvg = document.getElementById('treeSvg');
+  const statusBox = document.getElementById('statusBox');
+
+  const X_GAP = 56, Y_GAP = 74, RADIUS = 20, MARGIN = 30;
+
+  let root = null;
+  let nextId = 0;
+  let steps = [];
+  let stepPos = 0;
+  let highlight = {};
+  let busy = false;
+
+  function newNode(value) { return { id: nextId++, value, left: null, right: null }; }
+
+  function insertPlain(node, value) {
+    if (!node) return newNode(value);
+    if (value < node.value) node.left = insertPlain(node.left, value);
+    else if (value > node.value) node.right = insertPlain(node.right, value);
+    return node;
+  }
+
+  function findById(node, id) {
+    if (!node) return null;
+    if (node.id === id) return node;
+    return findById(node.left, id) || findById(node.right, id);
+  }
+
+  function layoutTree(node) {
+    let counter = 0;
+    function inorder(n, depth) {
+      if (!n) return;
+      inorder(n.left, depth + 1);
+      n.x = counter++;
+      n.y = depth;
+      inorder(n.right, depth + 1);
+    }
+    inorder(node, 0);
+  }
+
+  function collectNodes(node, arr) {
+    if (!node) return arr;
+    arr.push(node);
+    collectNodes(node.left, arr);
+    collectNodes(node.right, arr);
+    return arr;
+  }
+
+  function renderTree() {
+    treeSvg.innerHTML = '';
+    if (!root) {
+      treeSvg.setAttribute('width', 200);
+      treeSvg.setAttribute('height', 60);
+      return;
+    }
+    layoutTree(root);
+    const nodes = collectNodes(root, []);
+    const maxX = Math.max(...nodes.map(n => n.x));
+    const maxY = Math.max(...nodes.map(n => n.y));
+    const width = MARGIN * 2 + maxX * X_GAP + RADIUS * 2;
+    const height = MARGIN * 2 + maxY * Y_GAP + RADIUS * 2;
+    treeSvg.setAttribute('width', width);
+    treeSvg.setAttribute('height', height);
+
+    function px(n) { return MARGIN + RADIUS + n.x * X_GAP; }
+    function py(n) { return MARGIN + RADIUS + n.y * Y_GAP; }
+
+    const ns = 'http://www.w3.org/2000/svg';
+    nodes.forEach(n => {
+      [n.left, n.right].forEach(child => {
+        if (!child) return;
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', px(n)); line.setAttribute('y1', py(n));
+        line.setAttribute('x2', px(child)); line.setAttribute('y2', py(child));
+        line.setAttribute('stroke', '#c7cad1'); line.setAttribute('stroke-width', 2);
+        treeSvg.appendChild(line);
+      });
+    });
+    nodes.forEach(n => {
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', px(n)); circle.setAttribute('cy', py(n)); circle.setAttribute('r', RADIUS);
+      let fill = '#ffffff', stroke = '#c7cad1';
+      if (highlight.target === n.id) { fill = '#ffe3e3'; stroke = '#e03131'; }
+      else if (highlight.successor === n.id) { fill = '#f3e8ff'; stroke = '#ae3ec9'; }
+      else if (highlight.newNode === n.id) { fill = '#e7f0ff'; stroke = '#1971c2'; }
+      else if (highlight.current === n.id) { fill = '#fff3bf'; stroke = '#f08c00'; }
+      circle.setAttribute('fill', fill);
+      circle.setAttribute('stroke', stroke);
+      circle.setAttribute('stroke-width', 2.5);
+      treeSvg.appendChild(circle);
+
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('x', px(n)); text.setAttribute('y', py(n) + 5);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '13');
+      text.setAttribute('font-weight', '700');
+      text.textContent = n.value;
+      treeSvg.appendChild(text);
+    });
+  }
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  // ---- Giải thuật: sinh các bước Insert ----
+  function buildInsertSteps(value) {
+    const s = [];
+    if (!root) {
+      s.push({ type: 'attachRoot', value, text: 'Cây đang rỗng → node mới trở thành root.' });
+      s.push({ type: 'done', text: 'Hoàn tất chèn!' });
+      return s;
+    }
+    let node = root;
+    while (true) {
+      if (value === node.value) {
+        s.push({ type: 'current', id: node.id, text: `${value} = ${node.value} → giá trị đã tồn tại, không chèn trùng.` });
+        s.push({ type: 'done', text: 'Kết thúc (không có thay đổi).' });
+        return s;
+      }
+      if (value < node.value) {
+        if (!node.left) {
+          s.push({ type: 'current', id: node.id, text: `${value} < ${node.value} → đi sang con trái, đang trống.` });
+          s.push({ type: 'attachLeft', parentId: node.id, value, text: `Chèn ${value} làm con trái của ${node.value}.` });
+          s.push({ type: 'done', text: 'Hoàn tất chèn!' });
+          return s;
+        }
+        s.push({ type: 'current', id: node.id, text: `${value} < ${node.value} → đi sang con trái.` });
+        node = node.left;
+      } else {
+        if (!node.right) {
+          s.push({ type: 'current', id: node.id, text: `${value} > ${node.value} → đi sang con phải, đang trống.` });
+          s.push({ type: 'attachRight', parentId: node.id, value, text: `Chèn ${value} làm con phải của ${node.value}.` });
+          s.push({ type: 'done', text: 'Hoàn tất chèn!' });
+          return s;
+        }
+        s.push({ type: 'current', id: node.id, text: `${value} > ${node.value} → đi sang con phải.` });
+        node = node.right;
+      }
+    }
+  }
+
+  // ---- Giải thuật: sinh các bước Delete (3 trường hợp) ----
+  function buildDeleteSteps(value) {
+    const s = [];
+    let parent = null, side = null, node = root;
+    while (node && node.value !== value) {
+      if (value < node.value) {
+        s.push({ type: 'current', id: node.id, text: `${value} < ${node.value} → đi sang con trái.` });
+        parent = node; side = 'left'; node = node.left;
+      } else {
+        s.push({ type: 'current', id: node.id, text: `${value} > ${node.value} → đi sang con phải.` });
+        parent = node; side = 'right'; node = node.right;
+      }
+    }
+    if (!node) {
+      s.push({ type: 'notFound', text: `Không tìm thấy ${value} trong cây.` });
+      s.push({ type: 'done', text: 'Kết thúc.' });
+      return s;
+    }
+    s.push({ type: 'foundTarget', id: node.id, text: `Tìm thấy node cần xóa: ${node.value}.` });
+
+    function removeSimple(targetNode, targetParent, targetSide) {
+      const child = targetNode.left || targetNode.right || null;
+      if (!targetParent) {
+        s.push({
+          type: 'removeRoot',
+          replacementId: child ? child.id : null,
+          text: child ? `Node cần xóa là root, có 1 con → ${child.value} trở thành root mới.` : 'Node cần xóa là root và không có con → cây trở thành rỗng.',
+        });
+      } else {
+        s.push({
+          type: 'removeNode', id: targetNode.id, parentId: targetParent.id, side: targetSide,
+          replacementId: child ? child.id : null,
+          text: child ? `${targetParent.value}.${targetSide} = ${child.value} (con duy nhất của node bị xóa).` : `${targetParent.value}.${targetSide} = NULL (node bị xóa là lá).`,
+        });
+      }
+    }
+
+    if (!node.left && !node.right) {
+      s.push({ type: 'caseNote', text: `Node ${node.value} là lá (không có con) → Trường hợp 1: xóa trực tiếp.` });
+      removeSimple(node, parent, side);
+    } else if (!node.left || !node.right) {
+      s.push({ type: 'caseNote', text: `Node ${node.value} chỉ có 1 con → Trường hợp 2: cho node cha trỏ thẳng tới con đó.` });
+      removeSimple(node, parent, side);
+    } else {
+      s.push({ type: 'caseNote', text: `Node ${node.value} có đủ 2 con → Trường hợp 3: cần tìm successor.` });
+      let succParent = node, succSide = 'right', succ = node.right;
+      while (succ.left) {
+        s.push({ type: 'successorVisit', id: succ.id, text: `Đi tới ${succ.value}, còn con trái → tiếp tục sang trái để tìm phần tử nhỏ nhất.` });
+        succParent = succ; succSide = 'left'; succ = succ.left;
+      }
+      s.push({ type: 'successorVisit', id: succ.id, text: `${succ.value} không còn con trái → đây là successor (nhỏ nhất bên cây con phải).` });
+      s.push({ type: 'copyValue', targetId: node.id, newValue: succ.value, text: `Sao chép giá trị successor (${succ.value}) vào node ${node.value}.` });
+      removeSimple(succ, succParent, succSide);
+    }
+    s.push({ type: 'done', text: 'Hoàn tất xóa node!' });
+    return s;
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'attachRoot': { const n = newNode(s.value); root = n; highlight = { newNode: n.id }; break; }
+      case 'attachLeft': { const parent = findById(root, s.parentId); const n = newNode(s.value); parent.left = n; highlight = { newNode: n.id }; break; }
+      case 'attachRight': { const parent = findById(root, s.parentId); const n = newNode(s.value); parent.right = n; highlight = { newNode: n.id }; break; }
+      case 'current': highlight = { current: s.id }; break;
+      case 'notFound': highlight = {}; break;
+      case 'foundTarget': highlight = { target: s.id }; break;
+      case 'caseNote': break;
+      case 'successorVisit': highlight = { target: highlight.target, successor: s.id }; break;
+      case 'copyValue': { const t = findById(root, s.targetId); t.value = s.newValue; highlight = { target: s.targetId, successor: highlight.successor }; break; }
+      case 'removeNode': {
+        const parent = findById(root, s.parentId);
+        parent[s.side] = s.replacementId !== null ? findById(root, s.replacementId) : null;
+        highlight = {};
+        break;
+      }
+      case 'removeRoot':
+        root = s.replacementId !== null ? findById(root, s.replacementId) : null;
+        highlight = {};
+        break;
+      case 'done': break;
+    }
+  }
+
+  function startOperation(builtSteps) {
+    steps = builtSteps;
+    stepPos = 0;
+    busy = true;
+    renderTree();
+    setStatus('Nhấn "Từng bước" hoặc "Chạy tự động" để xem thao tác diễn ra.');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderTree();
+    setStatus(s.text, s.type === 'done' ? 'done' : (s.type === 'notFound' ? 'error' : ''));
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  function buildTree() {
+    stopAuto();
+    const values = valuesInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    root = null;
+    values.forEach(v => { root = insertPlain(root, v); });
+    highlight = {};
+    steps = [];
+    stepPos = 0;
+    busy = false;
+    renderTree();
+    setStatus(`Đã dựng cây từ ${values.length} giá trị.`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  buildBtn.addEventListener('click', buildTree);
+  insertBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildInsertSteps(v));
+  });
+  deleteBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildDeleteSteps(v));
+  });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  buildTree();
+</script>
+</body>
+</html>

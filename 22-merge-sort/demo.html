@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Merge Sort</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --swap: #e03131;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .bars-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 280px;
+    padding: 30px 4px 0;
+    border-bottom: 2px solid var(--border);
+  }
+  .bar-wrap { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 24px; }
+  .bar-value { font-size: 0.72rem; margin-bottom: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bar { width: 100%; max-width: 42px; background: var(--accent); border-radius: 4px 4px 0 0; transition: height 0.25s, background 0.2s; }
+  .bar.current { background: var(--current); }
+  .bar.swap { background: var(--swap); }
+  .bar.sorted { background: var(--sorted); }
+  .bar-idx { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+  .status {
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f3f5;
+    min-height: 20px;
+    margin-top: 14px;
+  }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Merge Sort</h1>
+  <p class="subtitle">Chia đôi mảng đệ quy đến khi còn 1 phần tử, rồi trộn dần các đoạn con đã sắp xếp lại với nhau.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Mảng (các số cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="arrayInput" value="8, 3, 15, 6, 22, 1, 19, 9">
+      </div>
+      <button id="randomBtn">Ngẫu nhiên</button>
+      <button class="primary" id="applyBtn">Tạo mảng</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <button id="resetBtn">Reset</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="100" max="1200" value="350" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Đang so sánh (trái/phải)</span>
+      <span><span class="dot" style="background:var(--swap)"></span> Vừa ghi vào vị trí trộn</span>
+      <span><span class="dot" style="background:var(--sorted)"></span> Mảng đã hoàn tất</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="bars-container" id="barsContainer"></div>
+    <div class="status" id="statusBox">Nhấn "Từng bước" hoặc "Chạy tự động" để bắt đầu.</div>
+  </div>
+
+<script>
+  const arrayInput = document.getElementById('arrayInput');
+  const applyBtn = document.getElementById('applyBtn');
+  const randomBtn = document.getElementById('randomBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const barsContainer = document.getElementById('barsContainer');
+  const statusBox = document.getElementById('statusBox');
+
+  let workingArr = [];
+  let maxValue = 1;
+  let steps = [];
+  let stepPos = 0;
+  let sortedSet = new Set();
+  let highlight = {};
+  let done = false;
+  let autoTimer = null;
+
+  // ---- Giải thuật: sinh danh sách các bước ----
+  function simulate(arr) {
+    const a = arr.slice();
+    const steps = [];
+
+    function mergeSort(lo, hi) {
+      if (lo >= hi) return;
+      const mid = Math.floor((lo + hi) / 2);
+      mergeSort(lo, mid);
+      mergeSort(mid + 1, hi);
+      merge(lo, mid, hi);
+    }
+
+    function merge(lo, mid, hi) {
+      const left = a.slice(lo, mid + 1);
+      const right = a.slice(mid + 1, hi + 1);
+      let i = 0, j = 0, k = lo;
+      while (i < left.length && j < right.length) {
+        const li = lo + i, rj = mid + 1 + j;
+        steps.push({ type: 'compare', i: li, j: rj, text: `Trộn [${lo}..${hi}]: so sánh A[${li}]=${left[i]} (trái) và A[${rj}]=${right[j]} (phải).` });
+        if (left[i] <= right[j]) {
+          a[k] = left[i];
+          steps.push({ type: 'overwrite', index: k, value: left[i], text: `${left[i]} ≤ ${right[j]} → ghi ${left[i]} vào vị trí ${k}.` });
+          i++;
+        } else {
+          a[k] = right[j];
+          steps.push({ type: 'overwrite', index: k, value: right[j], text: `${right[j]} < ${left[i]} → ghi ${right[j]} vào vị trí ${k}.` });
+          j++;
+        }
+        k++;
+      }
+      while (i < left.length) {
+        a[k] = left[i];
+        steps.push({ type: 'overwrite', index: k, value: left[i], text: `Chép nốt phần tử còn lại ${left[i]} vào vị trí ${k}.` });
+        i++; k++;
+      }
+      while (j < right.length) {
+        a[k] = right[j];
+        steps.push({ type: 'overwrite', index: k, value: right[j], text: `Chép nốt phần tử còn lại ${right[j]} vào vị trí ${k}.` });
+        j++; k++;
+      }
+    }
+
+    mergeSort(0, a.length - 1);
+    steps.push({ type: 'sortedAll', text: 'Toàn bộ mảng đã có thứ tự.' });
+    steps.push({ type: 'done', text: 'Mảng đã được sắp xếp xong!' });
+    return steps;
+  }
+
+  // ---- Engine dùng chung cho các demo sắp xếp dạng cột ----
+  function parseArray() {
+    return arrayInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  }
+
+  function randomArray() {
+    const n = 8 + Math.floor(Math.random() * 5);
+    const arr = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 40));
+    arrayInput.value = arr.join(', ');
+  }
+
+  function render() {
+    barsContainer.innerHTML = '';
+    workingArr.forEach((v, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'bar-wrap';
+      let barClass = 'bar';
+      if (sortedSet.has(i)) barClass += ' sorted';
+      else if (highlight.swap && highlight.swap.includes(i)) barClass += ' swap';
+      else if (highlight.compare && highlight.compare.includes(i)) barClass += ' current';
+
+      const heightPct = Math.max(4, (v / maxValue) * 100);
+      wrap.innerHTML = `
+        <div class="bar-value">${v}</div>
+        <div class="${barClass}" style="height:${heightPct}%"></div>
+        <div class="bar-idx">${i}</div>
+      `;
+      barsContainer.appendChild(wrap);
+    });
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function applyStep(step) {
+    switch (step.type) {
+      case 'compare':
+        highlight = { compare: [step.i, step.j] };
+        break;
+      case 'overwrite':
+        workingArr[step.index] = step.value;
+        highlight = { swap: [step.index] };
+        break;
+      case 'sortedAll':
+        for (let k = 0; k < workingArr.length; k++) sortedSet.add(k);
+        highlight = {};
+        break;
+      case 'done':
+        highlight = {};
+        break;
+    }
+  }
+
+  function reset() {
+    stopAuto();
+    const arr = parseArray();
+    workingArr = arr.slice();
+    maxValue = Math.max(...workingArr, 1);
+    steps = simulate(arr);
+    stepPos = 0;
+    sortedSet = new Set();
+    highlight = {};
+    done = false;
+    render();
+    setStatus(`Sẵn sàng sắp xếp mảng gồm ${workingArr.length} phần tử.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (done || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    render();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      done = true;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  function stopAuto() {
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  }
+
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (done) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  applyBtn.addEventListener('click', reset);
+  randomBtn.addEventListener('click', () => { randomArray(); reset(); });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+  resetBtn.addEventListener('click', reset);
+
+  reset();
+</script>
+</body>
+</html>

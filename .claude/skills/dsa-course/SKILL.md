@@ -48,9 +48,9 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 19. `19-insertion-sort` — Chèn trực tiếp — Demo: có
 
 ### Buổi 5 — Sắp xếp nâng cao
-- [ ] 20. `20-quick-sort` — Quick Sort — Demo: có
-- [ ] 21. `21-heap-sort` — Heap Sort — Demo: có
-- [ ] 22. `22-merge-sort` — Merge Sort — Demo: có
+- [x] 20. `20-quick-sort` — Quick Sort — Demo: có
+- [x] 21. `21-heap-sort` — Heap Sort — Demo: có
+- [x] 22. `22-merge-sort` — Merge Sort — Demo: có
 
 ### Buổi 6 — Danh sách liên kết đơn
 - [ ] 23. `23-linked-list-fundamentals` — Khái niệm DSLK & so sánh với mảng — Demo: không

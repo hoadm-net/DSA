@@ -41,11 +41,11 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 14. `14-binary-search` — Tìm kiếm nhị phân — Demo: có
 
 ### Buổi 4 — Sắp xếp cơ bản
-- [ ] 15. `15-sorting-problem-fundamentals` — Khái niệm bài toán sắp xếp — Demo: không
-- [ ] 16. `16-interchange-sort` — Đổi chỗ trực tiếp — Demo: có
-- [ ] 17. `17-bubble-sort` — Nổi bọt — Demo: có
-- [ ] 18. `18-selection-sort` — Chọn trực tiếp — Demo: có
-- [ ] 19. `19-insertion-sort` — Chèn trực tiếp — Demo: có
+- [x] 15. `15-sorting-problem-fundamentals` — Khái niệm bài toán sắp xếp — Demo: không
+- [x] 16. `16-interchange-sort` — Đổi chỗ trực tiếp — Demo: có
+- [x] 17. `17-bubble-sort` — Nổi bọt — Demo: có
+- [x] 18. `18-selection-sort` — Chọn trực tiếp — Demo: có
+- [x] 19. `19-insertion-sort` — Chèn trực tiếp — Demo: có
 
 ### Buổi 5 — Sắp xếp nâng cao
 - [ ] 20. `20-quick-sort` — Quick Sort — Demo: có

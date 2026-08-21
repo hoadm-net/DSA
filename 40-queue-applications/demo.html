@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Queue: lập lịch Round-Robin</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  .field.narrow { min-width: 90px; flex: none; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+
+  .row-title { font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .queue-row { display: flex; gap: 6px; flex-wrap: wrap; min-height: 40px; margin-bottom: 16px; }
+  .chip {
+    padding: 7px 12px; border: 2px solid var(--border); border-radius: 999px;
+    font-weight: 700; font-size: 0.85rem; background: #fff;
+  }
+  .cpu-box {
+    display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border: 2px solid var(--accent); border-radius: 8px; background: #e7f0ff;
+    font-weight: 700; margin-bottom: 16px;
+  }
+  .gantt { display: flex; flex-wrap: wrap; gap: 2px; min-height: 34px; margin-bottom: 16px; }
+  .gantt-seg {
+    height: 34px; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 0.75rem; font-weight: 700; border-radius: 4px; min-width: 26px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Ứng dụng Queue: lập lịch Round-Robin</h1>
+  <p class="subtitle">Lấy tiến trình đầu hàng đợi chạy tối đa 1 quantum; nếu chưa xong, đưa trở lại cuối hàng đợi.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Tiến trình (tên:burst, cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="procInput" value="P1:5, P2:3, P3:8, P4:2">
+      </div>
+      <div class="field narrow">
+        <label>Quantum</label>
+        <input type="number" id="quantumInput" value="3" min="1">
+      </div>
+      <button class="primary" id="initBtn">Bắt đầu lập lịch</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="150" max="1200" value="500" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row-title">Hàng đợi tiến trình (front bên trái)</div>
+    <div class="queue-row" id="queueRow"></div>
+
+    <div class="row-title">CPU</div>
+    <div class="cpu-box" id="cpuBox">(rảnh)</div>
+
+    <div class="row-title">Biểu đồ Gantt</div>
+    <div class="gantt" id="ganttRow"></div>
+
+    <table id="procTable"></table>
+    <div class="status" id="statusBox">Nhập danh sách tiến trình rồi nhấn "Bắt đầu lập lịch".</div>
+  </div>
+
+<script>
+  const procInput = document.getElementById('procInput');
+  const quantumInput = document.getElementById('quantumInput');
+  const initBtn = document.getElementById('initBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const queueRow = document.getElementById('queueRow');
+  const cpuBox = document.getElementById('cpuBox');
+  const ganttRow = document.getElementById('ganttRow');
+  const procTable = document.getElementById('procTable');
+  const statusBox = document.getElementById('statusBox');
+
+  const COLORS = ['#3b5bdb', '#e8590c', '#2f9e44', '#ae3ec9', '#e03131', '#1971c2', '#f08c00'];
+
+  let steps = [];
+  let stepPos = 0;
+  let procDefs = [];      // { name, burst }
+  let colorMap = {};
+  let queueDisplay = [];
+  let remainingMap = {};
+  let statusMap = {};     // name -> 'waiting' | 'done'
+  let completionMap = {};
+  let currentRunning = null;
+  let ganttSegments = [];
+  let busy = false;
+
+  function parseProcs() {
+    return procInput.value.split(',').map(s => s.trim()).filter(Boolean).map(tok => {
+      const [name, burst] = tok.split(':').map(x => x.trim());
+      return { name, burst: parseInt(burst, 10) };
+    });
+  }
+
+  // ---- Giải thuật: sinh danh sách các bước Round-Robin ----
+  function simulate(procs, quantum) {
+    const steps = [];
+    const remaining = {};
+    procs.forEach(p => remaining[p.name] = p.burst);
+    let queue = procs.map(p => p.name);
+    let time = 0;
+    while (queue.length) {
+      const name = queue.shift();
+      steps.push({ type: 'dequeue', name, text: `Lấy ${name} ra khỏi đầu hàng đợi (Dequeue).` });
+      const run = Math.min(quantum, remaining[name]);
+      steps.push({ type: 'run', name, duration: run, startTime: time, text: `Cấp CPU cho ${name} chạy ${run} đơn vị thời gian (t=${time} → t=${time + run}).` });
+      time += run;
+      remaining[name] -= run;
+      if (remaining[name] > 0) {
+        queue.push(name);
+        steps.push({ type: 'enqueueBack', name, remaining: remaining[name], text: `${name} chưa xong (còn ${remaining[name]}) → đưa trở lại cuối hàng đợi.` });
+      } else {
+        steps.push({ type: 'complete', name, completionTime: time, text: `${name} đã hoàn tất tại t=${time}.` });
+      }
+    }
+    steps.push({ type: 'done', text: `Tất cả tiến trình hoàn tất tại t=${time}.` });
+    return steps;
+  }
+
+  function renderQueue() {
+    queueRow.innerHTML = queueDisplay.length
+      ? queueDisplay.map(n => `<div class="chip" style="border-color:${colorMap[n]}">${n}</div>`).join('')
+      : '<span style="color:var(--muted);font-size:0.85rem;">(trống)</span>';
+  }
+
+  function renderCpu() {
+    if (currentRunning) {
+      cpuBox.style.borderColor = colorMap[currentRunning.name];
+      cpuBox.style.background = colorMap[currentRunning.name] + '22';
+      cpuBox.textContent = `${currentRunning.name} đang chạy (${currentRunning.duration} đơn vị)`;
+    } else {
+      cpuBox.style.borderColor = 'var(--border)';
+      cpuBox.style.background = '#f1f3f5';
+      cpuBox.textContent = '(rảnh)';
+    }
+  }
+
+  function renderGantt() {
+    ganttRow.innerHTML = ganttSegments.map(seg => `
+      <div class="gantt-seg" style="background:${colorMap[seg.name]};width:${seg.duration * 26}px;" title="${seg.name}: t=${seg.start}→${seg.start + seg.duration}">
+        ${seg.name}
+      </div>
+    `).join('');
+  }
+
+  function renderTable() {
+    const rows = procDefs.map(p => {
+      const st = statusMap[p.name];
+      const stLabel = st === 'done' ? `Hoàn tất tại t=${completionMap[p.name]}` : (currentRunning && currentRunning.name === p.name ? 'Đang chạy' : 'Đang chờ');
+      return `<tr>
+        <td><span class="chip" style="border-color:${colorMap[p.name]};padding:2px 8px;">${p.name}</span></td>
+        <td>${p.burst}</td>
+        <td>${remainingMap[p.name]}</td>
+        <td>${stLabel}</td>
+      </tr>`;
+    }).join('');
+    procTable.innerHTML = `
+      <thead><tr><th>Tiến trình</th><th>Burst</th><th>Còn lại</th><th>Trạng thái</th></tr></thead>
+      <tbody>${rows}</tbody>
+    `;
+  }
+
+  function renderAll() {
+    renderQueue();
+    renderCpu();
+    renderGantt();
+    renderTable();
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'dequeue':
+        queueDisplay.shift();
+        currentRunning = null;
+        break;
+      case 'run':
+        currentRunning = { name: s.name, duration: s.duration };
+        ganttSegments.push({ name: s.name, duration: s.duration, start: s.startTime });
+        remainingMap[s.name] -= s.duration;
+        break;
+      case 'enqueueBack':
+        queueDisplay.push(s.name);
+        currentRunning = null;
+        break;
+      case 'complete':
+        statusMap[s.name] = 'done';
+        completionMap[s.name] = s.completionTime;
+        currentRunning = null;
+        break;
+      case 'done':
+        currentRunning = null;
+        break;
+    }
+  }
+
+  function initAll() {
+    stopAuto();
+    procDefs = parseProcs();
+    const quantum = Math.max(1, parseInt(quantumInput.value, 10) || 3);
+    colorMap = {};
+    procDefs.forEach((p, i) => colorMap[p.name] = COLORS[i % COLORS.length]);
+    steps = simulate(procDefs, quantum);
+    stepPos = 0;
+    queueDisplay = procDefs.map(p => p.name);
+    remainingMap = {};
+    statusMap = {};
+    completionMap = {};
+    procDefs.forEach(p => { remainingMap[p.name] = p.burst; statusMap[p.name] = 'waiting'; });
+    currentRunning = null;
+    ganttSegments = [];
+    busy = true;
+    renderAll();
+    setStatus(`Sẵn sàng lập lịch Round-Robin với quantum = ${quantum}.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderAll();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initAll);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initAll();
+</script>
+</body>
+</html>

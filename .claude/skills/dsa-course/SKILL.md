@@ -73,10 +73,10 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 36. `36-stack-application-recursion-removal` — Ứng dụng: khử đệ quy — Demo: có
 
 ### Buổi 9 — Queue
-- [ ] 37. `37-queue-fundamentals` — Khái niệm Queue (FIFO) — Demo: không
-- [ ] 38. `38-queue-array-implementation` — Cài đặt Queue bằng mảng (vòng) — Demo: có
-- [ ] 39. `39-queue-linked-list-implementation` — Cài đặt Queue bằng DSLK — Demo: có
-- [ ] 40. `40-queue-applications` — Ứng dụng Queue — Demo: có
+- [x] 37. `37-queue-fundamentals` — Khái niệm Queue (FIFO) — Demo: không
+- [x] 38. `38-queue-array-implementation` — Cài đặt Queue bằng mảng (vòng) — Demo: có
+- [x] 39. `39-queue-linked-list-implementation` — Cài đặt Queue bằng DSLK — Demo: có
+- [x] 40. `40-queue-applications` — Ứng dụng Queue — Demo: có
 
 ### Buổi 10 — Cây tổng quát, cây nhị phân, BST
 - [ ] 41. `41-general-tree-fundamentals` — Khái niệm cây tổng quát — Demo: không

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Queue vòng bằng mảng</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 120px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .array-scroll { overflow-x: auto; padding: 44px 4px 26px; }
+  .array-row { display: flex; min-width: max-content; }
+  .cell-slot { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .box {
+    width: 60px; height: 56px; border: 2px solid var(--border); display: flex;
+    align-items: center; justify-content: center; font-weight: 700; background: #fff;
+  }
+  .box.filled { background: #e7f0ff; }
+  .box.flash { border-color: var(--current); background: #fff3bf; }
+  .idx { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+  .ptr-front, .ptr-rear {
+    position: absolute; top: -26px; font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+  }
+  .ptr-front { color: #2f9e44; }
+  .ptr-rear { color: var(--current); }
+  .meta-row { display: flex; gap: 20px; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
+  .status.ok { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Cài đặt Queue bằng mảng (dạng vòng)</h1>
+  <p class="subtitle">Enqueue ghi tại (front + count) % capacity; Dequeue lấy tại front rồi front = (front + 1) % capacity.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Dung lượng (capacity)</label>
+        <input type="number" id="capacityInput" value="6" min="2" max="10">
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo Queue</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị</label>
+        <input type="text" id="valueInput" value="5">
+      </div>
+      <button id="enqueueBtn">Enqueue</button>
+      <button id="dequeueBtn">Dequeue</button>
+      <button id="frontBtn">Front (Peek)</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="array-scroll">
+      <div class="array-row" id="arrayRow"></div>
+    </div>
+    <div class="meta-row" id="metaRow"></div>
+    <div class="status" id="statusBox">Khởi tạo Queue để bắt đầu.</div>
+  </div>
+
+<script>
+  const capacityInput = document.getElementById('capacityInput');
+  const valueInput = document.getElementById('valueInput');
+  const initBtn = document.getElementById('initBtn');
+  const enqueueBtn = document.getElementById('enqueueBtn');
+  const dequeueBtn = document.getElementById('dequeueBtn');
+  const frontBtn = document.getElementById('frontBtn');
+  const arrayRow = document.getElementById('arrayRow');
+  const metaRow = document.getElementById('metaRow');
+  const statusBox = document.getElementById('statusBox');
+
+  let capacity = 6;
+  let items = [];
+  let front = 0;
+  let count = 0;
+  let flashIndex = -1;
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function rearIndex() {
+    return count === 0 ? -1 : (front + count - 1) % capacity;
+  }
+
+  function render() {
+    arrayRow.innerHTML = '';
+    const rIdx = rearIndex();
+    for (let i = 0; i < capacity; i++) {
+      const occupied = count > 0 && (
+        (front <= rIdx && i >= front && i <= rIdx) ||
+        (front > rIdx && (i >= front || i <= rIdx))
+      );
+      const slot = document.createElement('div');
+      slot.className = 'cell-slot';
+      const labels = [];
+      if (i === front && count > 0) labels.push('<div class="ptr-front">front</div>');
+      if (i === rIdx) labels.push('<div class="ptr-rear">rear</div>');
+      slot.innerHTML = `
+        ${labels.join('')}
+        <div class="box ${occupied ? 'filled' : ''} ${i === flashIndex ? 'flash' : ''}">${occupied ? items[i] : ''}</div>
+        <div class="idx">${i}</div>
+      `;
+      arrayRow.appendChild(slot);
+    }
+    metaRow.innerHTML = `<span>front = ${count > 0 ? front : '—'}</span><span>rear = ${rIdx === -1 ? '—' : rIdx}</span><span>count = ${count} / ${capacity}</span>`;
+  }
+
+  function initQueue() {
+    capacity = Math.max(2, Math.min(10, parseInt(capacityInput.value, 10) || 6));
+    capacityInput.value = capacity;
+    items = new Array(capacity).fill(undefined);
+    front = 0;
+    count = 0;
+    flashIndex = -1;
+    render();
+    setStatus(`Đã khởi tạo Queue vòng với dung lượng ${capacity}.`);
+  }
+
+  function enqueue() {
+    const v = valueInput.value.trim() || '0';
+    if (count === capacity) {
+      setStatus(`Overflow! Queue đã đầy (capacity = ${capacity}), không thể Enqueue thêm.`, 'error');
+      return;
+    }
+    const idx = (front + count) % capacity;
+    items[idx] = v;
+    count++;
+    flashIndex = idx;
+    render();
+    setStatus(`Enqueue(${v}) → ghi vào vị trí (front + count-1) % capacity = ${idx}.`, 'ok');
+  }
+
+  function dequeue() {
+    if (count === 0) {
+      setStatus('Underflow! Queue đang rỗng, không thể Dequeue.', 'error');
+      return;
+    }
+    const v = items[front];
+    flashIndex = front;
+    render();
+    setStatus(`Dequeue() → lấy items[${front}] = ${v}, sau đó front = (front + 1) % capacity.`, 'ok');
+    front = (front + 1) % capacity;
+    count--;
+    flashIndex = -1;
+    setTimeout(render, 10);
+  }
+
+  function peekFront() {
+    if (count === 0) {
+      setStatus('Queue đang rỗng, Front() không có giá trị để xem.', 'error');
+      return;
+    }
+    flashIndex = front;
+    render();
+    setStatus(`Front() → items[${front}] = ${items[front]} (không thay đổi front).`, 'ok');
+  }
+
+  initBtn.addEventListener('click', initQueue);
+  enqueueBtn.addEventListener('click', enqueue);
+  dequeueBtn.addEventListener('click', dequeue);
+  frontBtn.addEventListener('click', peekFront);
+
+  initQueue();
+</script>
+</body>
+</html>

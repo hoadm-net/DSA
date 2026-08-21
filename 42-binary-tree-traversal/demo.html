@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Duyệt cây nhị phân (NLR/LNR/LRN)</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  .radio-row { display: flex; gap: 14px; font-size: 0.88rem; align-items: center; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .tree-scroll { overflow-x: auto; }
+  .row-title { font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .output-row { display: flex; gap: 6px; flex-wrap: wrap; min-height: 36px; margin-bottom: 14px; }
+  .chip { padding: 6px 12px; border: 2px solid var(--sorted); background: #d3f9d8; color: #2b8a3e; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Duyệt cây nhị phân (NLR / LNR / LRN)</h1>
+  <p class="subtitle">Cây được dựng theo quy tắc BST từ dãy giá trị nhập vào. Chọn kiểu duyệt rồi chạy từng bước để xem thứ tự thăm node.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Dãy giá trị dựng cây (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="valuesInput" value="8, 3, 10, 1, 6, 14, 4, 7">
+      </div>
+      <button class="primary" id="buildBtn">Dựng cây</button>
+    </div>
+    <div class="controls-row">
+      <div class="radio-row">
+        <label><input type="radio" name="order" value="NLR" checked> NLR (Pre-order)</label>
+        <label><input type="radio" name="order" value="LNR"> LNR (In-order)</label>
+        <label><input type="radio" name="order" value="LRN"> LRN (Post-order)</label>
+      </div>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="150" max="1200" value="500" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row-title">Kết quả duyệt (thứ tự in ra)</div>
+    <div class="output-row" id="outputRow"></div>
+    <div class="row-title">Cây nhị phân</div>
+    <div class="tree-scroll"><svg id="treeSvg"></svg></div>
+    <div class="status" id="statusBox">Nhập dãy giá trị rồi nhấn "Dựng cây".</div>
+  </div>
+
+<script>
+  const valuesInput = document.getElementById('valuesInput');
+  const buildBtn = document.getElementById('buildBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const outputRow = document.getElementById('outputRow');
+  const treeSvg = document.getElementById('treeSvg');
+  const statusBox = document.getElementById('statusBox');
+
+  const X_GAP = 56, Y_GAP = 74, RADIUS = 20, MARGIN = 30;
+
+  let root = null;
+  let steps = [];
+  let stepPos = 0;
+  let output = [];
+  let enterHighlight = -1;
+  let outputSet = new Set();
+  let busy = false;
+
+  function buildBST(values) {
+    let idCounter = 0;
+    let r = null;
+    function insert(node, value) {
+      if (!node) return { id: idCounter++, value, left: null, right: null };
+      if (value < node.value) node.left = insert(node.left, value);
+      else if (value > node.value) node.right = insert(node.right, value);
+      return node;
+    }
+    values.forEach(v => { r = insert(r, v); });
+    return r;
+  }
+
+  function layoutTree(node) {
+    let counter = 0;
+    function inorder(n, depth) {
+      if (!n) return;
+      inorder(n.left, depth + 1);
+      n.x = counter++;
+      n.y = depth;
+      inorder(n.right, depth + 1);
+    }
+    inorder(node, 0);
+  }
+
+  function collectNodes(node, arr) {
+    if (!node) return arr;
+    arr.push(node);
+    collectNodes(node.left, arr);
+    collectNodes(node.right, arr);
+    return arr;
+  }
+
+  function renderTree() {
+    treeSvg.innerHTML = '';
+    if (!root) {
+      treeSvg.setAttribute('width', 200);
+      treeSvg.setAttribute('height', 60);
+      return;
+    }
+    layoutTree(root);
+    const nodes = collectNodes(root, []);
+    const maxX = Math.max(...nodes.map(n => n.x));
+    const maxY = Math.max(...nodes.map(n => n.y));
+    const width = MARGIN * 2 + maxX * X_GAP + RADIUS * 2;
+    const height = MARGIN * 2 + maxY * Y_GAP + RADIUS * 2;
+    treeSvg.setAttribute('width', width);
+    treeSvg.setAttribute('height', height);
+
+    function px(n) { return MARGIN + RADIUS + n.x * X_GAP; }
+    function py(n) { return MARGIN + RADIUS + n.y * Y_GAP; }
+
+    const ns = 'http://www.w3.org/2000/svg';
+    nodes.forEach(n => {
+      [n.left, n.right].forEach(child => {
+        if (!child) return;
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', px(n)); line.setAttribute('y1', py(n));
+        line.setAttribute('x2', px(child)); line.setAttribute('y2', py(child));
+        line.setAttribute('stroke', '#c7cad1'); line.setAttribute('stroke-width', 2);
+        treeSvg.appendChild(line);
+      });
+    });
+    nodes.forEach(n => {
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', px(n)); circle.setAttribute('cy', py(n)); circle.setAttribute('r', RADIUS);
+      let fill = '#ffffff', stroke = '#c7cad1';
+      if (outputSet.has(n.id)) { fill = '#d3f9d8'; stroke = '#2f9e44'; }
+      if (enterHighlight === n.id) { fill = '#fff3bf'; stroke = '#f08c00'; }
+      circle.setAttribute('fill', fill);
+      circle.setAttribute('stroke', stroke);
+      circle.setAttribute('stroke-width', 2.5);
+      treeSvg.appendChild(circle);
+
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('x', px(n)); text.setAttribute('y', py(n) + 5);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '13');
+      text.setAttribute('font-weight', '700');
+      text.textContent = n.value;
+      treeSvg.appendChild(text);
+    });
+  }
+
+  function renderOutput() {
+    outputRow.innerHTML = output.length
+      ? output.map(v => `<div class="chip">${v}</div>`).join('')
+      : '<span style="color:var(--muted);font-size:0.85rem;">(chưa có)</span>';
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  // ---- Giải thuật: sinh các bước duyệt cây theo NLR/LNR/LRN ----
+  function traverseSteps(node, order) {
+    const steps = [];
+    function visit(n) {
+      if (!n) return;
+      steps.push({ type: 'enter', id: n.id, text: `Đi tới node ${n.value}.` });
+      const outputStep = { type: 'output', id: n.id, value: n.value, text: `In node ${n.value}.` };
+      if (order === 'NLR') {
+        steps.push(outputStep);
+        visit(n.left);
+        visit(n.right);
+      } else if (order === 'LNR') {
+        visit(n.left);
+        steps.push(outputStep);
+        visit(n.right);
+      } else {
+        visit(n.left);
+        visit(n.right);
+        steps.push(outputStep);
+      }
+    }
+    visit(node);
+    steps.push({ type: 'done', text: `Hoàn tất duyệt ${order}!` });
+    return steps;
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'enter':
+        enterHighlight = s.id;
+        break;
+      case 'output':
+        output.push(s.value);
+        outputSet.add(s.id);
+        enterHighlight = s.id;
+        break;
+      case 'done':
+        enterHighlight = -1;
+        break;
+    }
+  }
+
+  function currentOrder() {
+    return document.querySelector('input[name="order"]:checked').value;
+  }
+
+  function buildTree() {
+    stopAuto();
+    const values = valuesInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    root = buildBST(values);
+    startTraversal();
+  }
+
+  function startTraversal() {
+    steps = root ? traverseSteps(root, currentOrder()) : [];
+    stepPos = 0;
+    output = [];
+    outputSet = new Set();
+    enterHighlight = -1;
+    busy = true;
+    renderTree();
+    renderOutput();
+    setStatus(root ? `Sẵn sàng duyệt ${currentOrder()}.` : 'Cây rỗng.');
+    stepBtn.disabled = !root;
+    runBtn.disabled = !root;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderTree();
+    renderOutput();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  buildBtn.addEventListener('click', buildTree);
+  document.querySelectorAll('input[name="order"]').forEach(r => r.addEventListener('change', startTraversal));
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  buildTree();
+</script>
+</body>
+</html>

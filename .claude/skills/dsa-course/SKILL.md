@@ -79,9 +79,9 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 40. `40-queue-applications` — Ứng dụng Queue — Demo: có
 
 ### Buổi 10 — Cây tổng quát, cây nhị phân, BST
-- [ ] 41. `41-general-tree-fundamentals` — Khái niệm cây tổng quát — Demo: không
-- [ ] 42. `42-binary-tree-traversal` — Cây nhị phân: tính chất & duyệt (NLR/LNR/LRN) — Demo: có
-- [ ] 43. `43-binary-search-tree` — BST: định nghĩa & thêm/tìm — Demo: có
+- [x] 41. `41-general-tree-fundamentals` — Khái niệm cây tổng quát — Demo: không
+- [x] 42. `42-binary-tree-traversal` — Cây nhị phân: tính chất & duyệt (NLR/LNR/LRN) — Demo: có
+- [x] 43. `43-binary-search-tree` — BST: định nghĩa & thêm/tìm — Demo: có
 
 ### Buổi 11 — Xóa node BST, giới thiệu AVL
 - [ ] 44. `44-bst-delete-node` — Xóa node khỏi BST (3 trường hợp) — Demo: có

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Sắp xếp trên danh sách liên kết</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --swap: #e03131;
+    --sorted: #2f9e44;
+    --min: #ae3ec9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .list-scroll { overflow-x: auto; padding: 40px 4px 20px; }
+  .list-container { display: flex; align-items: center; min-width: max-content; }
+  .node-slot { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .head-label {
+    position: absolute; top: -26px; font-size: 0.72rem; font-weight: 700; color: var(--accent);
+  }
+  .node {
+    display: flex;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .node.current { border-color: var(--current); background: #fff3bf; }
+  .node.swap { border-color: var(--swap); background: #ffe3e3; }
+  .node.sorted { border-color: var(--sorted); background: #d3f9d8; }
+  .node.min { border-color: var(--min); background: #f3e8ff; }
+  .cell-value { padding: 12px 16px; font-weight: 700; min-width: 44px; text-align: center; }
+  .cell-next { padding: 12px 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-left: 1px solid var(--border); min-width: 28px; }
+  .arrow { width: 34px; text-align: center; color: var(--muted); font-size: 1.3rem; }
+  .null-box { padding: 12px 14px; border: 2px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Sắp xếp trên danh sách liên kết (Selection Sort)</h1>
+  <p class="subtitle">Duyệt tìm node nhỏ nhất trong phần chưa sắp xếp, rồi đổi chỗ dữ liệu (Data) — không đổi liên kết Next.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Danh sách ban đầu (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="listInput" value="8, 3, 15, 6, 22, 1, 19">
+      </div>
+      <button id="randomBtn">Ngẫu nhiên</button>
+      <button class="primary" id="initBtn">Khởi tạo danh sách</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <button id="resetBtn">Reset</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="100" max="1200" value="400" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Đang so sánh</span>
+      <span><span class="dot" style="background:var(--min)"></span> Nhỏ nhất tạm thời</span>
+      <span><span class="dot" style="background:var(--swap)"></span> Đang đổi dữ liệu</span>
+      <span><span class="dot" style="background:var(--sorted)"></span> Đã đúng vị trí</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="list-scroll">
+      <div class="list-container" id="listContainer"></div>
+    </div>
+    <div class="status" id="statusBox">Nhấn "Từng bước" hoặc "Chạy tự động" để bắt đầu.</div>
+  </div>
+
+<script>
+  const listInput = document.getElementById('listInput');
+  const randomBtn = document.getElementById('randomBtn');
+  const initBtn = document.getElementById('initBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const listContainer = document.getElementById('listContainer');
+  const statusBox = document.getElementById('statusBox');
+
+  let list = [];
+  let steps = [];
+  let stepPos = 0;
+  let sortedSet = new Set();
+  let highlight = {};
+  let done = false;
+  let autoTimer = null;
+
+  // ---- Giải thuật: Selection Sort trên chuỗi node (đổi Data giữa 2 node) ----
+  function simulate(arr) {
+    const a = arr.slice();
+    const steps = [];
+    const n = a.length;
+    for (let i = 0; i < n - 1; i++) {
+      let minIdx = i;
+      steps.push({ type: 'markMin', compareIndex: i, minIndex: minIdx, text: `Giả sử node ở vị trí ${i} (Data=${a[i]}) là nhỏ nhất tạm thời.` });
+      for (let j = i + 1; j < n; j++) {
+        steps.push({ type: 'compare', i: j, j: minIdx, text: `So sánh node ${j} (Data=${a[j]}) với node nhỏ nhất hiện tại (Data=${a[minIdx]}).` });
+        if (a[j] < a[minIdx]) {
+          minIdx = j;
+          steps.push({ type: 'markMin', compareIndex: j, minIndex: minIdx, text: `Node ${j} nhỏ hơn → cập nhật node nhỏ nhất là vị trí ${minIdx}.` });
+        }
+      }
+      if (minIdx !== i) {
+        [a[i], a[minIdx]] = [a[minIdx], a[i]];
+        steps.push({ type: 'swap', i, j: minIdx, text: `Đổi Data giữa node ${i} và node ${minIdx} (không đổi liên kết Next).` });
+      }
+      steps.push({ type: 'sorted', index: i, text: `Node ở vị trí ${i} đã chứa đúng giá trị nhỏ nhất còn lại.` });
+    }
+    steps.push({ type: 'sorted', index: n - 1, text: 'Node cuối cùng mặc nhiên đã đúng vị trí.' });
+    steps.push({ type: 'done', text: 'Danh sách đã được sắp xếp xong!' });
+    return steps;
+  }
+
+  function parseList() {
+    return listInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  }
+
+  function randomList() {
+    const n = 6 + Math.floor(Math.random() * 4);
+    const arr = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 40));
+    listInput.value = arr.join(', ');
+  }
+
+  function renderList() {
+    listContainer.innerHTML = '';
+    if (list.length === 0) {
+      const nullBox = document.createElement('div');
+      nullBox.className = 'null-box';
+      nullBox.textContent = 'head = NULL (danh sách rỗng)';
+      listContainer.appendChild(nullBox);
+      return;
+    }
+    list.forEach((v, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'node-slot';
+      const nodeClasses = ['node'];
+      if (sortedSet.has(i)) nodeClasses.push('sorted');
+      else if (highlight.min === i) nodeClasses.push('min');
+      else if (highlight.swap && highlight.swap.includes(i)) nodeClasses.push('swap');
+      else if (highlight.compare && highlight.compare.includes(i)) nodeClasses.push('current');
+
+      slot.innerHTML = `
+        ${i === 0 ? '<div class="head-label">head</div>' : ''}
+        <div class="${nodeClasses.join(' ')}">
+          <div class="cell-value">${v}</div>
+          <div class="cell-next">•</div>
+        </div>
+      `;
+      listContainer.appendChild(slot);
+
+      const arrow = document.createElement('div');
+      arrow.className = 'arrow';
+      arrow.textContent = '→';
+      listContainer.appendChild(arrow);
+    });
+    const nullSlot = document.createElement('div');
+    nullSlot.innerHTML = '<div class="null-box">NULL</div>';
+    listContainer.appendChild(nullSlot);
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function applyStep(step) {
+    switch (step.type) {
+      case 'compare':
+        highlight = { compare: [step.i, step.j] };
+        break;
+      case 'swap':
+        [list[step.i], list[step.j]] = [list[step.j], list[step.i]];
+        highlight = { swap: [step.i, step.j] };
+        break;
+      case 'markMin':
+        highlight = { compare: [step.compareIndex], min: step.minIndex };
+        break;
+      case 'sorted':
+        sortedSet.add(step.index);
+        highlight = {};
+        break;
+      case 'done':
+        highlight = {};
+        break;
+    }
+  }
+
+  function initList() {
+    stopAuto();
+    list = parseList();
+    steps = simulate(list);
+    stepPos = 0;
+    sortedSet = new Set();
+    highlight = {};
+    done = false;
+    renderList();
+    setStatus(`Đã khởi tạo danh sách gồm ${list.length} node.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (done || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderList();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      done = true;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (done) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initList);
+  randomBtn.addEventListener('click', () => { randomList(); initList(); });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+  resetBtn.addEventListener('click', initList);
+
+  initList();
+</script>
+</body>
+</html>

@@ -61,9 +61,9 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 28. `28-delete-node` — Xóa node khỏi danh sách — Demo: có
 
 ### Buổi 7 — Sắp xếp trên DSLK, DSLK đôi/vòng
-- [ ] 29. `29-sorting-a-linked-list` — Sắp xếp trên danh sách liên kết — Demo: có
-- [ ] 30. `30-doubly-linked-list` — Danh sách liên kết đôi (giới thiệu) — Demo: có
-- [ ] 31. `31-circular-linked-list` — Danh sách liên kết vòng (giới thiệu) — Demo: có
+- [x] 29. `29-sorting-a-linked-list` — Sắp xếp trên danh sách liên kết — Demo: có
+- [x] 30. `30-doubly-linked-list` — Danh sách liên kết đôi (giới thiệu) — Demo: có
+- [x] 31. `31-circular-linked-list` — Danh sách liên kết vòng (giới thiệu) — Demo: có
 
 ### Buổi 8 — Stack
 - [ ] 32. `32-stack-fundamentals` — Khái niệm Stack (LIFO) — Demo: không

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Danh sách liên kết đôi</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .list-scroll { overflow-x: auto; padding: 44px 4px 24px; }
+  .list-container { display: flex; align-items: center; min-width: max-content; }
+  .node-slot { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .head-label, .tail-label, .pointer-label {
+    position: absolute; top: -26px; font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+  }
+  .head-label { color: var(--accent); left: -6px; }
+  .tail-label { color: var(--accent); right: -6px; }
+  .pointer-label { color: var(--current); left: 50%; transform: translateX(-50%); }
+  .node {
+    display: flex;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .node.current { border-color: var(--current); box-shadow: 0 0 0 3px rgba(240,140,0,0.18); }
+  .cell-value { padding: 12px 16px; font-weight: 700; min-width: 44px; text-align: center; }
+  .arrow-pair { display: flex; flex-direction: column; align-items: center; width: 40px; color: var(--muted); font-size: 0.85rem; line-height: 1.1; }
+  .arrow-pair .next-arrow { color: #3b5bdb; }
+  .arrow-pair .prev-arrow { color: #ae3ec9; }
+  .null-box {
+    padding: 12px 14px; border: 2px dashed var(--border); border-radius: 8px;
+    color: var(--muted); font-size: 0.85rem; font-weight: 600; position: relative;
+  }
+  .null-box.current { border-color: var(--current); color: var(--current); }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; }
+</style>
+</head>
+<body>
+  <h1>Danh sách liên kết đôi</h1>
+  <p class="subtitle">Mỗi node có hai liên kết: Next (→, xanh) trỏ tới node kế tiếp, Prev (←, tím) trỏ tới node trước đó.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Danh sách ban đầu (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="listInput" value="5, 8, 3, 19, 6">
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo danh sách</button>
+    </div>
+    <div class="controls-row">
+      <button id="toHeadBtn">p = head</button>
+      <button id="toTailBtn">p = tail</button>
+      <button id="nextBtn">Next → (p = p.Next)</button>
+      <button id="prevBtn">← Prev (p = p.Prev)</button>
+    </div>
+    <div class="legend">
+      <span>Node đầu = <b>head</b> (Prev = NULL)</span>
+      <span>Node cuối = <b>tail</b> (Next = NULL)</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="list-scroll">
+      <div class="list-container" id="listContainer"></div>
+    </div>
+    <div class="status" id="statusBox">Khởi tạo danh sách rồi dùng các nút để duyệt xuôi/ngược.</div>
+  </div>
+
+<script>
+  const listInput = document.getElementById('listInput');
+  const initBtn = document.getElementById('initBtn');
+  const toHeadBtn = document.getElementById('toHeadBtn');
+  const toTailBtn = document.getElementById('toTailBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const listContainer = document.getElementById('listContainer');
+  const statusBox = document.getElementById('statusBox');
+
+  let list = [];
+  let pointer = -1; // -1: trước head (NULL trái); n: sau tail (NULL phải); 0..n-1: tại node
+
+  function parseList() {
+    return listInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  function setStatus(text) {
+    statusBox.textContent = text;
+  }
+
+  function renderList() {
+    listContainer.innerHTML = '';
+
+    const leftNull = document.createElement('div');
+    leftNull.className = 'node-slot';
+    const atLeftNull = pointer === -1 && list.length > 0 ? true : (list.length === 0);
+    leftNull.innerHTML = `
+      ${pointer === -1 ? '<div class="pointer-label">p</div>' : ''}
+      <div class="null-box ${pointer === -1 ? 'current' : ''}">NULL</div>
+    `;
+    listContainer.appendChild(leftNull);
+
+    if (list.length === 0) return;
+
+    list.forEach((v, i) => {
+      const arrowPair = document.createElement('div');
+      arrowPair.className = 'arrow-pair';
+      arrowPair.innerHTML = `<span class="next-arrow">→</span><span class="prev-arrow">←</span>`;
+      listContainer.appendChild(arrowPair);
+
+      const slot = document.createElement('div');
+      slot.className = 'node-slot';
+      const labels = [];
+      if (i === 0) labels.push('<div class="head-label">head</div>');
+      if (i === list.length - 1) labels.push('<div class="tail-label">tail</div>');
+      if (pointer === i) labels.push('<div class="pointer-label">p</div>');
+
+      slot.innerHTML = `
+        ${labels.join('')}
+        <div class="node ${pointer === i ? 'current' : ''}">
+          <div class="cell-value">${v}</div>
+        </div>
+      `;
+      listContainer.appendChild(slot);
+    });
+
+    const arrowPairEnd = document.createElement('div');
+    arrowPairEnd.className = 'arrow-pair';
+    arrowPairEnd.innerHTML = `<span class="next-arrow">→</span><span class="prev-arrow">←</span>`;
+    listContainer.appendChild(arrowPairEnd);
+
+    const rightNull = document.createElement('div');
+    rightNull.className = 'node-slot';
+    rightNull.innerHTML = `
+      ${pointer === list.length ? '<div class="pointer-label">p</div>' : ''}
+      <div class="null-box ${pointer === list.length ? 'current' : ''}">NULL</div>
+    `;
+    listContainer.appendChild(rightNull);
+  }
+
+  function initList() {
+    list = parseList();
+    pointer = -1;
+    renderList();
+    setStatus(`Đã khởi tạo danh sách liên kết đôi gồm ${list.length} node.`);
+  }
+
+  toHeadBtn.addEventListener('click', () => {
+    if (list.length === 0) { setStatus('Danh sách rỗng.'); return; }
+    pointer = 0;
+    renderList();
+    setStatus(`p = head → p trỏ tới node có Data = ${list[0]}.`);
+  });
+
+  toTailBtn.addEventListener('click', () => {
+    if (list.length === 0) { setStatus('Danh sách rỗng.'); return; }
+    pointer = list.length - 1;
+    renderList();
+    setStatus(`p = tail → p trỏ tới node có Data = ${list[pointer]}.`);
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (list.length === 0) { setStatus('Danh sách rỗng.'); return; }
+    if (pointer >= list.length) { setStatus('p đang là NULL, không thể đi tiếp theo Next.'); return; }
+    pointer++;
+    renderList();
+    if (pointer >= list.length) {
+      setStatus('p = p.Next → p = NULL (đã qua khỏi node cuối).');
+    } else {
+      setStatus(`p = p.Next → p trỏ tới node có Data = ${list[pointer]}.`);
+    }
+  });
+
+  prevBtn.addEventListener('click', () => {
+    if (list.length === 0) { setStatus('Danh sách rỗng.'); return; }
+    if (pointer <= -1) { setStatus('p đang là NULL, không thể lùi tiếp theo Prev.'); return; }
+    pointer--;
+    renderList();
+    if (pointer <= -1) {
+      setStatus('p = p.Prev → p = NULL (đã lùi trước node head).');
+    } else {
+      setStatus(`p = p.Prev → p trỏ tới node có Data = ${list[pointer]}.`);
+    }
+  });
+
+  initBtn.addEventListener('click', initList);
+
+  initList();
+</script>
+</body>
+</html>

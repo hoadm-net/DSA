@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Bảng băm (Hash Table)</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --miss: #e03131;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 100px; }
+  .radio-row { display: flex; gap: 14px; font-size: 0.88rem; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .bucket-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .bucket-idx {
+    width: 34px; height: 34px; border-radius: 6px; background: #f1f3f5; color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
+  }
+  .bucket-idx.active { background: #fff3bf; color: var(--current); }
+  .chain-cells { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cell {
+    padding: 6px 12px; border: 2px solid var(--border); border-radius: 6px; font-weight: 700; font-size: 0.85rem; background: #fff;
+  }
+  .cell.new { border-color: var(--key); background: #e7f0ff; }
+  .cell.scan { border-color: var(--current); background: #fff3bf; }
+  .cell.found { border-color: var(--sorted); background: #d3f9d8; }
+  .cell.empty { border-style: dashed; color: var(--muted); font-weight: 400; }
+  .arrow-mini { color: var(--muted); font-size: 0.9rem; }
+
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Bảng băm (Hash Table)</h1>
+  <p class="subtitle">Hàm băm h(key) = key mod capacity. Chọn cách xử lý đụng độ để so sánh.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Capacity</label>
+        <input type="number" id="capacityInput" value="7" min="3" max="15">
+      </div>
+      <div class="radio-row">
+        <label><input type="radio" name="mode" value="chain" checked> Chaining (nối kết)</label>
+        <label><input type="radio" name="mode" value="probe"> Linear Probing (dò tuyến tính)</label>
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo bảng</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị</label>
+        <input type="number" id="valueInput" value="17">
+      </div>
+      <button id="insertBtn">Insert</button>
+      <button id="searchBtn">Search</button>
+      <button id="deleteBtn">Delete</button>
+    </div>
+    <div class="note" id="modeNote"></div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1200" value="500" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Đang xét / đụng độ</span>
+      <span><span class="dot" style="background:var(--key)"></span> Vừa thêm</span>
+      <span><span class="dot" style="background:var(--sorted)"></span> Tìm thấy</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="bucketsContainer"></div>
+    <div class="status" id="statusBox">Nhấn "Khởi tạo bảng" để bắt đầu.</div>
+  </div>
+
+<script>
+  const capacityInput = document.getElementById('capacityInput');
+  const valueInput = document.getElementById('valueInput');
+  const initBtn = document.getElementById('initBtn');
+  const insertBtn = document.getElementById('insertBtn');
+  const searchBtn = document.getElementById('searchBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const bucketsContainer = document.getElementById('bucketsContainer');
+  const statusBox = document.getElementById('statusBox');
+  const modeNote = document.getElementById('modeNote');
+
+  let capacity = 7;
+  let mode = 'chain';
+  let chainBuckets = [];   // mode chain: array of arrays
+  let probeBuckets = [];   // mode probe: array of value|null
+  let steps = [];
+  let stepPos = 0;
+  let highlight = {};
+  let busy = false;
+
+  function currentMode() { return document.querySelector('input[name="mode"]:checked').value; }
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function renderBuckets() {
+    bucketsContainer.innerHTML = '';
+    for (let i = 0; i < capacity; i++) {
+      const row = document.createElement('div');
+      row.className = 'bucket-row';
+      const idxBox = document.createElement('div');
+      idxBox.className = 'bucket-idx' + (highlight.idx === i ? ' active' : '');
+      idxBox.textContent = i;
+      row.appendChild(idxBox);
+
+      const cells = document.createElement('div');
+      cells.className = 'chain-cells';
+
+      if (mode === 'chain') {
+        const chain = chainBuckets[i];
+        if (chain.length === 0) {
+          cells.innerHTML = '<span class="cell empty">rỗng</span>';
+        } else {
+          chain.forEach((v, ci) => {
+            const cell = document.createElement('span');
+            let cls = 'cell';
+            if (highlight.idx === i && highlight.type === 'new' && ci === 0) cls += ' new';
+            if (highlight.idx === i && highlight.type === 'scan' && highlight.value === v) cls += ' scan';
+            if (highlight.idx === i && highlight.type === 'found' && highlight.value === v) cls += ' found';
+            cell.className = cls;
+            cell.textContent = v;
+            cells.appendChild(cell);
+            if (ci < chain.length - 1) {
+              const arrow = document.createElement('span');
+              arrow.className = 'arrow-mini';
+              arrow.textContent = '→';
+              cells.appendChild(arrow);
+            }
+          });
+        }
+      } else {
+        const v = probeBuckets[i];
+        const cell = document.createElement('span');
+        let cls = 'cell' + (v === null ? ' empty' : '');
+        if (highlight.idx === i && (highlight.type === 'new' || highlight.type === 'found')) cls += highlight.type === 'new' ? ' new' : ' found';
+        if (highlight.idx === i && highlight.type === 'scan') cls += ' scan';
+        cell.className = cls;
+        cell.textContent = v === null ? 'trống' : v;
+        cells.appendChild(cell);
+      }
+
+      row.appendChild(cells);
+      bucketsContainer.appendChild(row);
+    }
+  }
+
+  // ---- Sinh các bước cho từng thao tác ----
+  function buildInsertSteps(value) {
+    const idx0 = ((value % capacity) + capacity) % capacity;
+    const s = [{ type: 'hash', idx: idx0, text: `h(${value}) = ${value} mod ${capacity} = ${idx0}.` }];
+    if (mode === 'chain') {
+      const chain = chainBuckets[idx0];
+      if (chain.length > 0) {
+        s.push({ type: 'note', idx: idx0, text: `Vị trí ${idx0} đã có ${chain.length} phần tử → đụng độ, thêm vào đầu danh sách liên kết tại đây.` });
+      } else {
+        s.push({ type: 'note', idx: idx0, text: `Vị trí ${idx0} đang trống.` });
+      }
+      s.push({ type: 'insertChain', idx: idx0, value, text: `Thêm ${value} vào đầu danh sách liên kết tại items[${idx0}].` });
+    } else {
+      let idx = idx0, probes = 0;
+      while (probeBuckets[idx] !== null && probes < capacity) {
+        s.push({ type: 'probeCollision', idx, text: `Vị trí ${idx} đã có ${probeBuckets[idx]} → dò sang vị trí tiếp theo.` });
+        idx = (idx + 1) % capacity;
+        probes++;
+      }
+      if (probes >= capacity) {
+        s.push({ type: 'full', text: 'Bảng đã đầy, không thể thêm!' });
+      } else {
+        s.push({ type: 'insertProbe', idx, value, text: `Vị trí ${idx} đang trống → lưu ${value} tại đây.` });
+      }
+    }
+    s.push({ type: 'done', text: 'Hoàn tất!' });
+    return s;
+  }
+
+  function buildSearchSteps(value) {
+    const idx0 = ((value % capacity) + capacity) % capacity;
+    const s = [{ type: 'hash', idx: idx0, text: `h(${value}) = ${value} mod ${capacity} = ${idx0}.` }];
+    if (mode === 'chain') {
+      const chain = chainBuckets[idx0];
+      let found = false;
+      for (const v of chain) {
+        s.push({ type: 'scan', idx: idx0, value: v, text: `So sánh ${value} với ${v} trong danh sách liên kết tại items[${idx0}].` });
+        if (v === value) { found = true; break; }
+      }
+      if (found) s.push({ type: 'found', idx: idx0, value, text: `Tìm thấy ${value}!` });
+      else s.push({ type: 'notFound', text: `Không tìm thấy ${value} trong bảng.` });
+    } else {
+      let idx = idx0, probes = 0, found = false;
+      while (probes < capacity) {
+        if (probeBuckets[idx] === null) {
+          s.push({ type: 'notFound', text: `Vị trí ${idx} trống → dừng tìm, không có ${value} trong bảng.` });
+          break;
+        }
+        if (probeBuckets[idx] === value) { found = true; s.push({ type: 'found', idx, value, text: `Tìm thấy ${value} tại vị trí ${idx}!` }); break; }
+        s.push({ type: 'scan', idx, text: `Vị trí ${idx} có ${probeBuckets[idx]} ≠ ${value} → dò tiếp.` });
+        idx = (idx + 1) % capacity;
+        probes++;
+      }
+      if (!found && probes >= capacity) s.push({ type: 'notFound', text: `Đã dò hết bảng → không tìm thấy ${value}.` });
+    }
+    s.push({ type: 'done', text: 'Kết thúc.' });
+    return s;
+  }
+
+  function buildDeleteStepsChain(value) {
+    const idx0 = ((value % capacity) + capacity) % capacity;
+    const s = [{ type: 'hash', idx: idx0, text: `h(${value}) = ${value} mod ${capacity} = ${idx0}.` }];
+    const chain = chainBuckets[idx0];
+    let found = false;
+    for (const v of chain) {
+      s.push({ type: 'scan', idx: idx0, value: v, text: `So sánh ${value} với ${v} trong danh sách liên kết tại items[${idx0}].` });
+      if (v === value) { found = true; break; }
+    }
+    if (found) {
+      s.push({ type: 'deleteChain', idx: idx0, value, text: `Tìm thấy ${value} → xóa khỏi danh sách liên kết tại items[${idx0}].` });
+    } else {
+      s.push({ type: 'notFound', text: `Không tìm thấy ${value} để xóa.` });
+    }
+    s.push({ type: 'done', text: 'Kết thúc.' });
+    return s;
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'hash':
+        highlight = { idx: s.idx, type: 'hash' };
+        break;
+      case 'note':
+        highlight = { idx: s.idx, type: 'hash' };
+        break;
+      case 'probeCollision':
+        highlight = { idx: s.idx, type: 'scan' };
+        break;
+      case 'scan':
+        highlight = { idx: s.idx, type: 'scan', value: s.value };
+        break;
+      case 'insertChain':
+        chainBuckets[s.idx].unshift(s.value);
+        highlight = { idx: s.idx, type: 'new' };
+        break;
+      case 'insertProbe':
+        probeBuckets[s.idx] = s.value;
+        highlight = { idx: s.idx, type: 'new' };
+        break;
+      case 'deleteChain': {
+        const arr = chainBuckets[s.idx];
+        const pos = arr.indexOf(s.value);
+        if (pos !== -1) arr.splice(pos, 1);
+        highlight = {};
+        break;
+      }
+      case 'found':
+        highlight = { idx: s.idx, type: 'found', value: s.value };
+        break;
+      case 'notFound':
+      case 'full':
+      case 'done':
+        break;
+    }
+  }
+
+  function initTable() {
+    stopAuto();
+    capacity = Math.max(3, Math.min(15, parseInt(capacityInput.value, 10) || 7));
+    capacityInput.value = capacity;
+    mode = currentMode();
+    chainBuckets = Array.from({ length: capacity }, () => []);
+    probeBuckets = Array.from({ length: capacity }, () => null);
+    steps = [];
+    stepPos = 0;
+    highlight = {};
+    busy = false;
+    modeNote.textContent = mode === 'chain'
+      ? 'Chaining: mỗi vị trí giữ một danh sách liên kết các khóa đụng độ.'
+      : 'Linear Probing: đụng độ thì dò sang vị trí kế tiếp. Lưu ý: xóa trong Linear Probing cần kỹ thuật "tombstone" nâng cao hơn, không minh họa trong demo này (nút Delete chỉ khả dụng ở chế độ Chaining).';
+    deleteBtn.disabled = mode !== 'chain';
+    renderBuckets();
+    setStatus(`Đã khởi tạo bảng băm capacity=${capacity}, chế độ ${mode === 'chain' ? 'Chaining' : 'Linear Probing'}.`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  function startOperation(builtSteps) {
+    steps = builtSteps;
+    stepPos = 0;
+    highlight = {};
+    busy = true;
+    renderBuckets();
+    setStatus('Nhấn "Từng bước" hoặc "Chạy tự động" để xem thao tác diễn ra.');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderBuckets();
+    setStatus(s.text, s.type === 'done' ? 'done' : (s.type === 'notFound' || s.type === 'full' ? 'error' : ''));
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initTable);
+  document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', initTable));
+  insertBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildInsertSteps(v));
+  });
+  searchBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildSearchSteps(v));
+  });
+  deleteBtn.addEventListener('click', () => {
+    if (mode !== 'chain') return;
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildDeleteStepsChain(v));
+  });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initTable();
+</script>
+</body>
+</html>

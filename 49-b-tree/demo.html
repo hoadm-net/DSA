@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo B-Tree (t=2)</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 260px; flex: 2; }
+  .field.narrow { min-width: 100px; flex: none; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .note { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .tree-scroll { overflow-x: auto; min-height: 80px; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Cây nhiều nhánh — B-Tree (bậc tối thiểu t=2)</h1>
+  <p class="subtitle">Mỗi node tối đa 3 khóa, tối đa 4 con. Khi node đầy, tách và đẩy khóa giữa lên node cha.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị cần chèn (từng giá trị một, cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="valuesInput" value="10, 20, 30, 40, 50, 60, 70, 80, 90">
+      </div>
+      <button id="resetBtn">Reset cây rỗng</button>
+    </div>
+    <div class="controls-row">
+      <button class="primary" id="insertAllBtn">Chèn lần lượt tất cả (tự động dừng ở mỗi lần chèn)</button>
+    </div>
+    <div class="note">Nhấn "Chèn lần lượt tất cả" — mỗi lần chèn 1 khóa sẽ dừng lại; nhấn "Chèn khóa tiếp theo" để chèn khóa kế, hoặc dùng "Từng bước"/"Chạy tự động" để xem chi tiết quá trình chèn khóa hiện tại.</div>
+    <div class="controls-row">
+      <button id="insertNextBtn">Chèn khóa tiếp theo</button>
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1200" value="500" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tree-scroll"><svg id="treeSvg"></svg></div>
+    <div class="status" id="statusBox">Nhấn "Chèn lần lượt tất cả" để bắt đầu.</div>
+  </div>
+
+<script>
+  const valuesInput = document.getElementById('valuesInput');
+  const resetBtn = document.getElementById('resetBtn');
+  const insertAllBtn = document.getElementById('insertAllBtn');
+  const insertNextBtn = document.getElementById('insertNextBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const treeSvg = document.getElementById('treeSvg');
+  const statusBox = document.getElementById('statusBox');
+
+  const T = 2; // bậc tối thiểu: tối đa 2T-1=3 khóa, tối đa 2T=4 con
+  const KEY_W = 36, KEY_H = 34, X_GAP = 78, Y_GAP = 96, MARGIN = 30;
+
+  let root = null;      // cây thật (kết quả sau khi hoàn tất 1 lần chèn)
+  let nextId = 0;
+  let pendingValues = [];
+  let opSteps = [];
+  let opPos = 0;
+  let currentSnapshotTree = null;
+  let currentHighlight = [];
+  let busy = false;
+  let pendingFinalTree = null;
+
+  function deepClone(node) {
+    if (!node) return null;
+    return { id: node.id, keys: node.keys.slice(), children: node.children.map(deepClone), leaf: node.leaf };
+  }
+
+  // ---- Sinh các bước chèn 1 khóa (mỗi bước = 1 snapshot toàn bộ cây) ----
+  function simulateInsert(liveRoot, value, idRef) {
+    let simRoot = deepClone(liveRoot);
+    const steps = [];
+
+    function snap(highlight, text) {
+      steps.push({ tree: deepClone(simRoot), highlight: highlight.slice(), text });
+    }
+
+    function splitChild(parent, i) {
+      const fullChild = parent.children[i];
+      const midIndex = T - 1;
+      const midKey = fullChild.keys[midIndex];
+      const newRight = {
+        id: idRef.next++,
+        keys: fullChild.keys.slice(midIndex + 1),
+        children: fullChild.leaf ? [] : fullChild.children.slice(midIndex + 1),
+        leaf: fullChild.leaf,
+      };
+      fullChild.keys = fullChild.keys.slice(0, midIndex);
+      if (!fullChild.leaf) fullChild.children = fullChild.children.slice(0, midIndex + 1);
+      parent.keys.splice(i, 0, midKey);
+      parent.children.splice(i + 1, 0, newRight);
+      snap([parent.id, fullChild.id, newRight.id], `Node con đã đầy (3 khóa) → tách: đẩy khóa ${midKey} lên node cha, chia thành 2 node con.`);
+    }
+
+    function insertNonFull(node, value) {
+      if (node.leaf) {
+        let i = node.keys.length - 1;
+        while (i >= 0 && node.keys[i] > value) i--;
+        node.keys.splice(i + 1, 0, value);
+        snap([node.id], `Node lá → chèn khóa ${value} vào đúng vị trí: [${node.keys.join(', ')}].`);
+        return;
+      }
+      let i = node.keys.length - 1;
+      while (i >= 0 && node.keys[i] > value) i--;
+      i++;
+      snap([node.id], `Node [${node.keys.join(', ')}] → so sánh ${value}, đi xuống con thứ ${i}.`);
+      if (node.children[i].keys.length === 2 * T - 1) {
+        snap([node.children[i].id], `Con thứ ${i} đã đầy → phải tách trước khi đi xuống.`);
+        splitChild(node, i);
+        if (value > node.keys[i]) i++;
+      }
+      insertNonFull(node.children[i], value);
+    }
+
+    if (!simRoot) {
+      simRoot = { id: idRef.next++, keys: [value], children: [], leaf: true };
+      snap([simRoot.id], `Cây rỗng → tạo node gốc chứa khóa ${value}.`);
+    } else {
+      if (simRoot.keys.length === 2 * T - 1) {
+        snap([simRoot.id], `Root đã đầy (3 khóa) → cần tách trước khi chèn.`);
+        const newRoot = { id: idRef.next++, keys: [], children: [simRoot], leaf: false };
+        const oldRootRef = simRoot;
+        simRoot = newRoot;
+        splitChild(simRoot, 0);
+        snap([simRoot.id], `Root mới sau khi tách — chiều cao cây tăng thêm 1.`);
+      }
+      insertNonFull(simRoot, value);
+    }
+    steps.push({ tree: deepClone(simRoot), highlight: [], text: 'Hoàn tất chèn khóa này!' });
+    return { steps, finalTree: simRoot };
+  }
+
+  function layout(node, depth, counter) {
+    if (node.leaf) {
+      node.x = counter.next++;
+      node.y = depth;
+      return;
+    }
+    node.children.forEach(c => layout(c, depth + 1, counter));
+    node.x = node.children.reduce((sum, c) => sum + c.x, 0) / node.children.length;
+    node.y = depth;
+  }
+  function collectNodes(node, arr) {
+    if (!node) return arr;
+    arr.push(node);
+    node.children.forEach(c => collectNodes(c, arr));
+    return arr;
+  }
+
+  function renderSnapshot(tree, highlight) {
+    treeSvg.innerHTML = '';
+    if (!tree) { treeSvg.setAttribute('width', 240); treeSvg.setAttribute('height', 60); return; }
+    layout(tree, 0, { next: 0 });
+    const nodes = collectNodes(tree, []);
+    const maxX = Math.max(...nodes.map(n => n.x));
+    const maxY = Math.max(...nodes.map(n => n.y));
+    const maxKeys = Math.max(...nodes.map(n => n.keys.length));
+    const width = MARGIN * 2 + maxX * X_GAP + maxKeys * KEY_W + 40;
+    const height = MARGIN * 2 + maxY * Y_GAP + KEY_H + 20;
+    treeSvg.setAttribute('width', width);
+    treeSvg.setAttribute('height', height);
+
+    function cx(n) { return MARGIN + n.x * X_GAP + 20; }
+    function cy(n) { return MARGIN + n.y * Y_GAP; }
+    function boxLeft(n) { return cx(n) - (n.keys.length * KEY_W) / 2; }
+
+    const ns = 'http://www.w3.org/2000/svg';
+
+    nodes.forEach(n => {
+      const left = boxLeft(n);
+      const w = n.keys.length * KEY_W;
+      const bottom = cy(n) + KEY_H;
+      const k = n.children.length;
+      n.children.forEach((child, j) => {
+        const startX = left + ((j + 0.5) * w) / Math.max(k, 1);
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', startX); line.setAttribute('y1', bottom);
+        line.setAttribute('x2', cx(child)); line.setAttribute('y2', cy(child));
+        line.setAttribute('stroke', '#c7cad1'); line.setAttribute('stroke-width', 2);
+        treeSvg.appendChild(line);
+      });
+    });
+
+    nodes.forEach(n => {
+      const left = boxLeft(n);
+      const w = n.keys.length * KEY_W;
+      const isHighlight = highlight.includes(n.id);
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', left); rect.setAttribute('y', cy(n));
+      rect.setAttribute('width', w); rect.setAttribute('height', KEY_H);
+      rect.setAttribute('rx', 6);
+      rect.setAttribute('fill', isHighlight ? '#fff3bf' : '#ffffff');
+      rect.setAttribute('stroke', isHighlight ? '#f08c00' : '#c7cad1');
+      rect.setAttribute('stroke-width', 2.5);
+      treeSvg.appendChild(rect);
+
+      n.keys.forEach((key, ki) => {
+        if (ki > 0) {
+          const divider = document.createElementNS(ns, 'line');
+          divider.setAttribute('x1', left + ki * KEY_W); divider.setAttribute('y1', cy(n));
+          divider.setAttribute('x2', left + ki * KEY_W); divider.setAttribute('y2', cy(n) + KEY_H);
+          divider.setAttribute('stroke', isHighlight ? '#f08c00' : '#c7cad1');
+          divider.setAttribute('stroke-width', 1.5);
+          treeSvg.appendChild(divider);
+        }
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('x', left + (ki + 0.5) * KEY_W);
+        text.setAttribute('y', cy(n) + KEY_H / 2 + 5);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '13');
+        text.setAttribute('font-weight', '700');
+        text.textContent = key;
+        treeSvg.appendChild(text);
+      });
+    });
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function resetTree() {
+    stopAuto();
+    root = null;
+    nextId = 0;
+    pendingValues = valuesInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    opSteps = [];
+    opPos = 0;
+    currentSnapshotTree = null;
+    currentHighlight = [];
+    busy = false;
+    renderSnapshot(null, []);
+    setStatus(`Cây rỗng. Còn ${pendingValues.length} khóa chờ chèn: [${pendingValues.join(', ')}].`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  function insertNext() {
+    if (pendingValues.length === 0) {
+      setStatus('Không còn khóa nào để chèn.', true);
+      return;
+    }
+    stopAuto();
+    const value = pendingValues.shift();
+    const idRef = { next: nextId };
+    const result = simulateInsert(root, value, idRef);
+    opSteps = result.steps;
+    opPos = 0;
+    busy = true;
+    nextId = idRef.next;
+    pendingFinalTree = result.finalTree;
+    setStatus(`Bắt đầu chèn khóa ${value}. Nhấn "Từng bước" hoặc "Chạy tự động" để xem chi tiết.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+    renderSnapshot(root, []);
+  }
+
+  function insertAll() {
+    resetTree();
+    insertNext();
+  }
+
+  function step() {
+    if (!busy || opPos >= opSteps.length) return;
+    const s = opSteps[opPos];
+    renderSnapshot(s.tree, s.highlight);
+    setStatus(s.text, opPos === opSteps.length - 1);
+    opPos++;
+    if (opPos >= opSteps.length) {
+      root = pendingFinalTree;
+      busy = false;
+      stopAuto();
+      if (pendingValues.length > 0) {
+        setStatus(`Đã chèn xong khóa này. Còn ${pendingValues.length} khóa: [${pendingValues.join(', ')}]. Nhấn "Chèn khóa tiếp theo".`, true);
+      } else {
+        setStatus('Đã chèn hết tất cả các khóa!', true);
+      }
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  resetBtn.addEventListener('click', resetTree);
+  insertAllBtn.addEventListener('click', insertAll);
+  insertNextBtn.addEventListener('click', insertNext);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  resetTree();
+</script>
+</body>
+</html>

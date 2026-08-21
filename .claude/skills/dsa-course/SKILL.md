@@ -92,8 +92,8 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 47. `47-avl-insert-delete` — Thêm/xóa node trong cây AVL — Demo: có
 
 ### Mở rộng (ngoài 12 buổi chính thức)
-- [ ] 48. `48-hash-table` — Bảng băm: hàm băm, xử lý đụng độ — Demo: có
-- [ ] 49. `49-b-tree` — Cây nhiều nhánh (B-Tree): cấu trúc & xây dựng — Demo: có
+- [x] 48. `48-hash-table` — Bảng băm: hàm băm, xử lý đụng độ — Demo: có
+- [x] 49. `49-b-tree` — Cây nhiều nhánh (B-Tree): cấu trúc & xây dựng — Demo: có
 
 ## Template README.md cho mỗi folder
 

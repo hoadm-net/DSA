@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Xóa node khỏi danh sách</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --swap: #e03131;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 160px; }
+  .field.wide { flex: 2; min-width: 260px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .list-scroll { overflow-x: auto; padding: 40px 4px 20px; }
+  .list-container { display: flex; align-items: center; min-width: max-content; }
+  .node-slot { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .head-label, .pointer-label, .pointer-label2 {
+    position: absolute;
+    top: -26px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .head-label { color: var(--accent); }
+  .pointer-label { color: var(--muted); }
+  .pointer-label2 { color: var(--current); }
+  .node {
+    display: flex;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .node.current { border-color: var(--current); box-shadow: 0 0 0 3px rgba(240,140,0,0.18); }
+  .cell-value { padding: 12px 16px; font-weight: 700; min-width: 44px; text-align: center; }
+  .cell-next { padding: 12px 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-left: 1px solid var(--border); min-width: 28px; }
+  .arrow { width: 34px; text-align: center; color: var(--muted); font-size: 1.3rem; }
+  .null-box { padding: 12px 14px; border: 2px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+  .null-box.current { border-color: var(--current); color: var(--current); }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+  .status.miss { background: #ffe3e3; color: #c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Xóa node khỏi danh sách</h1>
+  <p class="subtitle">Hai con trỏ prev/curr cùng duyệt tìm node cần xóa, sau đó prev "nhảy qua" curr.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field wide">
+        <label>Danh sách ban đầu (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="listInput" value="5, 8, 3, 19, 6, 12">
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo danh sách</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị cần xóa</label>
+        <input type="text" id="valueInput" value="19">
+      </div>
+      <button id="deleteBtn">Xóa theo giá trị</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1500" value="600" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Con trỏ prev / curr</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="list-scroll">
+      <div class="list-container" id="listContainer"></div>
+    </div>
+    <div class="status" id="statusBox">Khởi tạo danh sách rồi nhập giá trị cần xóa.</div>
+  </div>
+
+<script>
+  const listInput = document.getElementById('listInput');
+  const valueInput = document.getElementById('valueInput');
+  const initBtn = document.getElementById('initBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const listContainer = document.getElementById('listContainer');
+  const statusBox = document.getElementById('statusBox');
+
+  let list = [];
+  let steps = [];
+  let stepPos = 0;
+  let prevPtr = -1;
+  let currPtr = -1;
+  let currAtNull = false;
+  let busy = false;
+
+  function parseList() {
+    return listInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  function renderList() {
+    listContainer.innerHTML = '';
+    if (list.length === 0) {
+      const nullBox = document.createElement('div');
+      nullBox.className = 'null-box';
+      nullBox.textContent = 'head = NULL (danh sách rỗng)';
+      listContainer.appendChild(nullBox);
+      return;
+    }
+    list.forEach((v, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'node-slot';
+      const labels = [];
+      if (i === 0) labels.push({ text: 'head', cls: 'head-label' });
+      if (prevPtr === i) labels.push({ text: 'prev', cls: 'pointer-label' });
+      if (currPtr === i) labels.push({ text: 'curr', cls: 'pointer-label2' });
+
+      const isCurrent = prevPtr === i || currPtr === i;
+      const nodeClasses = ['node'];
+      if (isCurrent) nodeClasses.push('current');
+
+      const labelHtml = labels.map(l => `<div class="${l.cls}" style="left:${labels.indexOf(l) === 0 ? '0' : '50%'}">${l.text}</div>`).join('');
+
+      slot.innerHTML = `
+        ${labelHtml}
+        <div class="${nodeClasses.join(' ')}">
+          <div class="cell-value">${v}</div>
+          <div class="cell-next">•</div>
+        </div>
+      `;
+      listContainer.appendChild(slot);
+
+      const arrow = document.createElement('div');
+      arrow.className = 'arrow';
+      arrow.textContent = '→';
+      listContainer.appendChild(arrow);
+    });
+    const nullSlot = document.createElement('div');
+    nullSlot.className = 'node-slot';
+    nullSlot.innerHTML = `
+      ${currAtNull ? '<div class="pointer-label2">curr</div>' : ''}
+      <div class="null-box ${currAtNull ? 'current' : ''}">NULL</div>
+    `;
+    listContainer.appendChild(nullSlot);
+  }
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function initList() {
+    list = parseList();
+    steps = [];
+    stepPos = 0;
+    prevPtr = -1;
+    currPtr = -1;
+    currAtNull = false;
+    busy = false;
+    renderList();
+    setStatus(`Đã khởi tạo danh sách gồm ${list.length} node.`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  function buildDeleteSteps(value) {
+    const s = [];
+    s.push({ type: 'note', text: `Tìm node có giá trị ${value} để xóa.` });
+    if (list.length === 0) {
+      s.push({ type: 'notFound', text: 'Danh sách rỗng, không có gì để xóa.' });
+      s.push({ type: 'done', text: 'Kết thúc.' });
+      return s;
+    }
+    if (list[0] === value) {
+      s.push({ type: 'deleteHead', text: `head.Data = ${value} → xóa node đầu: head = head.Next.` });
+      s.push({ type: 'done', text: 'Đã xóa node thành công!' });
+      return s;
+    }
+    let prev = 0, curr = 1;
+    s.push({
+      type: 'moveTwo', prev, curr: curr < list.length ? curr : null,
+      text: curr < list.length ? `prev trỏ tới ${list[prev]}, curr trỏ tới ${list[curr]}.` : `prev trỏ tới ${list[prev]}, curr = NULL.`,
+    });
+    while (curr < list.length && list[curr] !== value) {
+      const oldPrevVal = list[prev];
+      prev = curr;
+      curr = curr + 1;
+      s.push({
+        type: 'moveTwo', prev, curr: curr < list.length ? curr : null,
+        text: curr < list.length
+          ? `curr.Data (${list[prev]}) ≠ ${value} → prev = curr, curr = curr.Next → curr trỏ tới ${list[curr]}.`
+          : `curr.Data (${list[prev]}) ≠ ${value} → prev = curr, curr = curr.Next → curr = NULL.`,
+      });
+    }
+    if (curr >= list.length) {
+      s.push({ type: 'notFound', text: `curr = NULL → không tìm thấy giá trị ${value} trong danh sách.` });
+      s.push({ type: 'done', text: 'Kết thúc.' });
+      return s;
+    }
+    s.push({ type: 'deleteMiddle', prevIndex: prev, currIndex: curr, text: `Tìm thấy curr.Data = ${value} → gán prev.Next = curr.Next (bỏ qua node ${value}).` });
+    s.push({ type: 'done', text: 'Đã xóa node thành công!' });
+    return s;
+  }
+
+  function startOperation(builtSteps) {
+    steps = builtSteps;
+    stepPos = 0;
+    prevPtr = -1;
+    currPtr = -1;
+    currAtNull = false;
+    busy = true;
+    renderList();
+    setStatus('Nhấn "Từng bước" hoặc "Chạy tự động" để xem thao tác diễn ra.');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'note':
+        prevPtr = -1; currPtr = -1; currAtNull = false;
+        break;
+      case 'moveTwo':
+        prevPtr = s.prev;
+        if (s.curr === null) { currPtr = -1; currAtNull = true; }
+        else { currPtr = s.curr; currAtNull = false; }
+        break;
+      case 'deleteHead':
+        list.shift();
+        prevPtr = -1; currPtr = -1; currAtNull = false;
+        break;
+      case 'deleteMiddle':
+        list.splice(s.currIndex, 1);
+        prevPtr = -1; currPtr = -1; currAtNull = false;
+        break;
+      case 'notFound':
+        prevPtr = -1; currPtr = -1; currAtNull = false;
+        break;
+      case 'done':
+        prevPtr = -1; currPtr = -1; currAtNull = false;
+        break;
+    }
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderList();
+    const kind = s.type === 'done' ? 'done' : (s.type === 'notFound' ? 'miss' : undefined);
+    setStatus(s.text, kind);
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initList);
+  deleteBtn.addEventListener('click', () => {
+    const v = valueInput.value.trim();
+    startOperation(buildDeleteSteps(v));
+  });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initList();
+</script>
+</body>
+</html>

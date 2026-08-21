@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Chèn node theo vị trí/thứ tự</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --sorted: #2f9e44;
+    --key: #1971c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 140px; }
+  .field.wide { flex: 2; min-width: 260px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .list-scroll { overflow-x: auto; padding: 40px 4px 20px; }
+  .list-container { display: flex; align-items: center; min-width: max-content; }
+  .node-slot { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .head-label, .pointer-label {
+    position: absolute;
+    top: -26px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .head-label { color: var(--accent); }
+  .pointer-label { color: var(--current); }
+  .node {
+    display: flex;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .node.current { border-color: var(--current); box-shadow: 0 0 0 3px rgba(240,140,0,0.18); }
+  .node.new { border-color: var(--key); box-shadow: 0 0 0 3px rgba(25,113,194,0.18); }
+  .cell-value { padding: 12px 16px; font-weight: 700; min-width: 44px; text-align: center; }
+  .cell-next { padding: 12px 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-left: 1px solid var(--border); min-width: 28px; }
+  .arrow { width: 34px; text-align: center; color: var(--muted); font-size: 1.3rem; }
+  .null-box { padding: 12px 14px; border: 2px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Chèn node vào danh sách (theo vị trí/theo thứ tự)</h1>
+  <p class="subtitle">Duyệt tới đúng vị trí (con trỏ prev), rồi chèn node mới bằng cách cập nhật hai liên kết Next.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field wide">
+        <label>Danh sách ban đầu, nên nhập theo thứ tự tăng dần (cách nhau bởi dấu phẩy)</label>
+        <input type="text" id="listInput" value="3, 8, 15, 22, 30">
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo danh sách</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị cần chèn</label>
+        <input type="text" id="valueInput" value="18">
+      </div>
+      <div class="field">
+        <label>Vị trí (0-based)</label>
+        <input type="number" id="positionInput" value="2" min="0">
+      </div>
+      <button id="insertPosBtn">Chèn theo vị trí</button>
+      <button id="insertOrderedBtn">Chèn theo thứ tự tăng dần</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1500" value="600" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Con trỏ prev đang duyệt</span>
+      <span><span class="dot" style="background:var(--key)"></span> Node vừa chèn</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="list-scroll">
+      <div class="list-container" id="listContainer"></div>
+    </div>
+    <div class="status" id="statusBox">Khởi tạo danh sách rồi chọn cách chèn.</div>
+  </div>
+
+<script>
+  const listInput = document.getElementById('listInput');
+  const valueInput = document.getElementById('valueInput');
+  const positionInput = document.getElementById('positionInput');
+  const initBtn = document.getElementById('initBtn');
+  const insertPosBtn = document.getElementById('insertPosBtn');
+  const insertOrderedBtn = document.getElementById('insertOrderedBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const listContainer = document.getElementById('listContainer');
+  const statusBox = document.getElementById('statusBox');
+
+  let list = [];
+  let steps = [];
+  let stepPos = 0;
+  let pointer = -1;
+  let newIndex = -1;
+  let busy = false;
+
+  function parseList() {
+    return listInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  function renderList() {
+    listContainer.innerHTML = '';
+    if (list.length === 0) {
+      const nullBox = document.createElement('div');
+      nullBox.className = 'null-box';
+      nullBox.textContent = 'head = NULL (danh sách rỗng)';
+      listContainer.appendChild(nullBox);
+      return;
+    }
+    list.forEach((v, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'node-slot';
+      let label = i === 0 ? 'head' : '';
+      let labelClass = 'head-label';
+      if (pointer === i) { label = label ? label + ' / prev' : 'prev'; labelClass = 'pointer-label'; }
+
+      const nodeClasses = ['node'];
+      if (pointer === i) nodeClasses.push('current');
+      if (newIndex === i) nodeClasses.push('new');
+
+      slot.innerHTML = `
+        ${label ? `<div class="${labelClass}">${label}</div>` : ''}
+        <div class="${nodeClasses.join(' ')}">
+          <div class="cell-value">${v}</div>
+          <div class="cell-next">•</div>
+        </div>
+      `;
+      listContainer.appendChild(slot);
+
+      const arrow = document.createElement('div');
+      arrow.className = 'arrow';
+      arrow.textContent = '→';
+      listContainer.appendChild(arrow);
+    });
+    const nullSlot = document.createElement('div');
+    nullSlot.innerHTML = '<div class="null-box">NULL</div>';
+    listContainer.appendChild(nullSlot);
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function initList() {
+    list = parseList();
+    steps = [];
+    stepPos = 0;
+    pointer = -1;
+    newIndex = -1;
+    busy = false;
+    positionInput.max = list.length;
+    renderList();
+    setStatus(`Đã khởi tạo danh sách gồm ${list.length} node.`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  function buildInsertAtPositionSteps(value, k) {
+    k = Math.max(0, Math.min(k, list.length));
+    const s = [];
+    s.push({ type: 'note', text: `Tạo node mới chứa giá trị ${value}, cần chèn vào vị trí ${k}.` });
+    if (k === 0) {
+      s.push({ type: 'insertAt', index: 0, value, text: 'Chèn tại vị trí 0 → newNode.Next = head; head = newNode.' });
+      s.push({ type: 'done', text: 'Hoàn tất chèn node!' });
+      return s;
+    }
+    for (let i = 0; i < k - 1; i++) {
+      s.push({
+        type: 'move',
+        index: i,
+        text: i === 0 ? `prev = head → prev trỏ tới node ${list[0]}.` : `prev = prev.Next → prev trỏ tới node ${list[i]}.`,
+      });
+    }
+    s.push({ type: 'move', index: k - 1, text: `prev đã trỏ tới node ${list[k - 1]} (ngay trước vị trí ${k}).` });
+    s.push({ type: 'insertAt', index: k, value, text: `newNode.Next = prev.Next; prev.Next = newNode → chèn tại vị trí ${k}.` });
+    s.push({ type: 'done', text: 'Hoàn tất chèn node!' });
+    return s;
+  }
+
+  function buildOrderedInsertSteps(value) {
+    const s = [];
+    s.push({ type: 'note', text: `Tạo node mới chứa giá trị ${value}, cần tìm đúng vị trí để giữ thứ tự tăng dần.` });
+    let idx = 0;
+    const val = Number(value);
+    while (idx < list.length && Number(list[idx]) < val) {
+      s.push({
+        type: 'move',
+        index: idx,
+        text: idx === 0
+          ? `prev = head → so sánh ${list[idx]} < ${value} → tiếp tục duyệt.`
+          : `prev = prev.Next → so sánh ${list[idx]} < ${value} → tiếp tục duyệt.`,
+      });
+      idx++;
+    }
+    s.push({ type: 'insertAt', index: idx, value, text: `Tìm được vị trí chèn: ${idx} (giữ danh sách có thứ tự tăng dần).` });
+    s.push({ type: 'done', text: 'Hoàn tất chèn node theo thứ tự!' });
+    return s;
+  }
+
+  function startOperation(builtSteps) {
+    steps = builtSteps;
+    stepPos = 0;
+    pointer = -1;
+    newIndex = -1;
+    busy = true;
+    renderList();
+    setStatus('Nhấn "Từng bước" hoặc "Chạy tự động" để xem thao tác diễn ra.');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'note':
+        pointer = -1;
+        break;
+      case 'move':
+        pointer = s.index;
+        break;
+      case 'insertAt':
+        list.splice(s.index, 0, s.value);
+        pointer = -1;
+        newIndex = s.index;
+        break;
+      case 'done':
+        pointer = -1;
+        break;
+    }
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderList();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initList);
+  insertPosBtn.addEventListener('click', () => {
+    const v = valueInput.value.trim() || '0';
+    const k = parseInt(positionInput.value, 10) || 0;
+    startOperation(buildInsertAtPositionSteps(v, k));
+  });
+  insertOrderedBtn.addEventListener('click', () => {
+    const v = valueInput.value.trim() || '0';
+    startOperation(buildOrderedInsertSteps(v));
+  });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initList();
+</script>
+</body>
+</html>

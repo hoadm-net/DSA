@@ -53,12 +53,12 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 22. `22-merge-sort` — Merge Sort — Demo: có
 
 ### Buổi 6 — Danh sách liên kết đơn
-- [ ] 23. `23-linked-list-fundamentals` — Khái niệm DSLK & so sánh với mảng — Demo: không
-- [ ] 24. `24-node-structure-and-list-types` — Cấu tạo Node & các loại DSLK — Demo: không
-- [ ] 25. `25-singly-linked-list-init-and-traverse` — Khởi tạo và duyệt DSLK đơn — Demo: có
-- [ ] 26. `26-insert-node-at-head-tail` — Thêm node vào đầu/cuối — Demo: có
-- [ ] 27. `27-insert-node-by-position` — Chèn node theo vị trí/thứ tự — Demo: có
-- [ ] 28. `28-delete-node` — Xóa node khỏi danh sách — Demo: có
+- [x] 23. `23-linked-list-fundamentals` — Khái niệm DSLK & so sánh với mảng — Demo: không
+- [x] 24. `24-node-structure-and-list-types` — Cấu tạo Node & các loại DSLK — Demo: không
+- [x] 25. `25-singly-linked-list-init-and-traverse` — Khởi tạo và duyệt DSLK đơn — Demo: có
+- [x] 26. `26-insert-node-at-head-tail` — Thêm node vào đầu/cuối — Demo: có
+- [x] 27. `27-insert-node-by-position` — Chèn node theo vị trí/thứ tự — Demo: có
+- [x] 28. `28-delete-node` — Xóa node khỏi danh sách — Demo: có
 
 ### Buổi 7 — Sắp xếp trên DSLK, DSLK đôi/vòng
 - [ ] 29. `29-sorting-a-linked-list` — Sắp xếp trên danh sách liên kết — Demo: có

@@ -88,8 +88,8 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 45. `45-avl-tree-fundamentals` — Cây AVL: khái niệm & chỉ số cân bằng — Demo: không
 
 ### Buổi 12 — Phép quay & thêm/xóa AVL
-- [ ] 46. `46-avl-rotations` — Các trường hợp mất cân bằng & phép quay (LL/LR/RR/RL) — Demo: có
-- [ ] 47. `47-avl-insert-delete` — Thêm/xóa node trong cây AVL — Demo: có
+- [x] 46. `46-avl-rotations` — Các trường hợp mất cân bằng & phép quay (LL/LR/RR/RL) — Demo: có
+- [x] 47. `47-avl-insert-delete` — Thêm/xóa node trong cây AVL — Demo: có
 
 ### Mở rộng (ngoài 12 buổi chính thức)
 - [ ] 48. `48-hash-table` — Bảng băm: hàm băm, xử lý đụng độ — Demo: có

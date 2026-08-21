@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Thêm/xóa node trong cây AVL</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --miss: #e03131;
+    --successor: #ae3ec9;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { min-width: 140px; }
+  .field.wide { flex: 2; min-width: 260px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.danger { background: var(--miss); color: #fff; border-color: var(--miss); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .tree-scroll { overflow-x: auto; min-height: 60px; }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 10px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Thêm/xóa node trong cây AVL</h1>
+  <p class="subtitle">Chèn/xóa như BST thường, sau đó cập nhật chiều cao & cân bằng lại trên đường lùi về root.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field wide">
+        <label>Dãy giá trị khởi tạo (tự cân bằng theo AVL)</label>
+        <input type="text" id="valuesInput" value="10, 20, 30, 40, 50, 25">
+      </div>
+      <button class="primary" id="buildBtn">Dựng lại cây</button>
+    </div>
+    <div class="controls-row">
+      <div class="field">
+        <label>Giá trị</label>
+        <input type="text" id="valueInput" value="5">
+      </div>
+      <button id="insertBtn">Insert</button>
+      <button class="danger" id="deleteBtn">Delete</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="200" max="1200" value="500" step="100">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--current)"></span> Đang xét (so sánh/cập nhật BF)</span>
+      <span><span class="dot" style="background:var(--miss)"></span> Node sẽ bị xóa</span>
+      <span><span class="dot" style="background:var(--successor)"></span> Successor</span>
+      <span><span class="dot" style="background:var(--key)"></span> Node vừa thêm</span>
+      <span style="color:#e03131;">BF đỏ = mất cân bằng tại thời điểm đó</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tree-scroll"><svg id="treeSvg"></svg></div>
+    <div class="status" id="statusBox">Nhập dãy giá trị rồi nhấn "Dựng lại cây".</div>
+  </div>
+
+<script>
+  const valuesInput = document.getElementById('valuesInput');
+  const valueInput = document.getElementById('valueInput');
+  const buildBtn = document.getElementById('buildBtn');
+  const insertBtn = document.getElementById('insertBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const treeSvg = document.getElementById('treeSvg');
+  const statusBox = document.getElementById('statusBox');
+
+  const X_GAP = 52, Y_GAP = 80, RADIUS = 19, MARGIN = 30;
+
+  let root = null;
+  let nextId = 0;
+  let nodeMap = {};
+  let steps = [];
+  let stepPos = 0;
+  let highlight = {};
+  let busy = false;
+
+  // ---- Cấu trúc node & tiện ích cây (dùng chung cho live tree lẫn bản mô phỏng) ----
+  function makeNode(id, value) { return { id, value, left: null, right: null }; }
+
+  function cloneTree(node) {
+    if (!node) return null;
+    return { id: node.id, value: node.value, left: cloneTree(node.left), right: cloneTree(node.right) };
+  }
+
+  function computeHeights(node) {
+    if (!node) return -1;
+    node.h = 1 + Math.max(computeHeights(node.left), computeHeights(node.right));
+    return node.h;
+  }
+  function heightOf(node) { return node ? node.h : -1; }
+  function updateHeight(node) { node.h = 1 + Math.max(heightOf(node.left), heightOf(node.right)); }
+  function getBalance(node) { return node ? heightOf(node.left) - heightOf(node.right) : 0; }
+
+  // Thực hiện xoay trên clone và phát ra đủ các bước setChild
+  // cho từng liên kết con bị thay đổi bên trong phép xoay, để cây thật replay đúng.
+  function doRotateRight(y, steps) {
+    const x = y.left;
+    const T2 = x.right;
+    steps.push({ type: 'setChild', parentId: y.id, side: 'left', resultId: T2 ? T2.id : null, text: `${y.value}.Left = ${T2 ? T2.value : 'NULL'}.` });
+    steps.push({ type: 'setChild', parentId: x.id, side: 'right', resultId: y.id, text: `${x.value}.Right = ${y.value}.` });
+    x.right = y; y.left = T2;
+    updateHeight(y); updateHeight(x);
+    return x;
+  }
+  function doRotateLeft(x, steps) {
+    const y = x.right;
+    const T2 = y.left;
+    steps.push({ type: 'setChild', parentId: x.id, side: 'right', resultId: T2 ? T2.id : null, text: `${x.value}.Right = ${T2 ? T2.value : 'NULL'}.` });
+    steps.push({ type: 'setChild', parentId: y.id, side: 'left', resultId: x.id, text: `${y.value}.Left = ${x.value}.` });
+    y.left = x; x.right = T2;
+    updateHeight(x); updateHeight(y);
+    return y;
+  }
+
+  function findValue(node, value) {
+    if (!node) return false;
+    if (value === node.value) return true;
+    return value < node.value ? findValue(node.left, value) : findValue(node.right, value);
+  }
+
+  // ---- Sinh các bước AVL Insert trên một cây clone, dùng chung idRef với cây thật ----
+  function buildAVLInsertSteps(liveRoot, value, idRef) {
+    const clone = cloneTree(liveRoot);
+    computeHeights(clone);
+    const steps = [];
+
+    function insert(node, parentId, side) {
+      if (!node) {
+        const nid = idRef.next++;
+        steps.push({ type: 'createNode', id: nid, value, text: `Tạo node mới ${value}.` });
+        steps.push({ type: 'setChild', parentId, side, resultId: nid, text: parentId === null ? `Cây rỗng → node ${value} trở thành root.` : `Gắn node ${value} vào vị trí trống.` });
+        return { id: nid, value, left: null, right: null, h: 0 };
+      }
+      if (value === node.value) {
+        steps.push({ type: 'visit', id: node.id, text: `${value} đã tồn tại trong cây, không chèn trùng.` });
+        steps.push({ type: 'setChild', parentId, side, resultId: node.id, text: 'Không có thay đổi.' });
+        return node;
+      }
+      const dir = value < node.value ? 'left' : 'right';
+      steps.push({ type: 'visit', id: node.id, text: `${value} ${dir === 'left' ? '<' : '>'} ${node.value} → đi sang ${dir === 'left' ? 'trái' : 'phải'}.` });
+      node[dir] = insert(node[dir], node.id, dir);
+
+      updateHeight(node);
+      const balance = getBalance(node);
+      steps.push({ type: 'balanceCheck', id: node.id, balance, text: `Cập nhật lại chiều cao node ${node.value}: BF = ${balance}.` });
+
+      let resultNode = node;
+      if (balance > 1 && value < node.left.value) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con trái ${node.left.value} lệch trái → trường hợp LL: quay phải.` });
+        resultNode = doRotateRight(node, steps);
+      } else if (balance < -1 && value > node.right.value) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con phải ${node.right.value} lệch phải → trường hợp RR: quay trái.` });
+        resultNode = doRotateLeft(node, steps);
+      } else if (balance > 1 && value > node.left.value) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con trái ${node.left.value} lệch phải → trường hợp LR: quay trái tại con trái, rồi quay phải tại đây.` });
+        node.left = doRotateLeft(node.left, steps);
+        resultNode = doRotateRight(node, steps);
+      } else if (balance < -1 && value < node.right.value) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con phải ${node.right.value} lệch trái → trường hợp RL: quay phải tại con phải, rồi quay trái tại đây.` });
+        node.right = doRotateRight(node.right, steps);
+        resultNode = doRotateLeft(node, steps);
+      }
+      if (resultNode !== node) {
+        steps.push({ type: 'rotated', text: `Đã cân bằng lại. Gốc cây con tại vị trí này bây giờ là ${resultNode.value}.` });
+      }
+      steps.push({ type: 'setChild', parentId, side, resultId: resultNode.id, text: parentId === null ? `Cập nhật root = ${resultNode.value}.` : `Gắn lại ${resultNode.value} vào vị trí cũ.` });
+      return resultNode;
+    }
+
+    insert(clone, null, null);
+    steps.push({ type: 'done', text: 'Hoàn tất chèn và cân bằng lại cây!' });
+    return steps;
+  }
+
+  // ---- Sinh các bước AVL Delete trên một cây clone ----
+  function buildAVLDeleteSteps(liveRoot, value) {
+    const clone = cloneTree(liveRoot);
+    computeHeights(clone);
+    const steps = [];
+
+    if (!findValue(clone, value)) {
+      let node = clone;
+      while (node) {
+        if (value < node.value) { steps.push({ type: 'visit', id: node.id, text: `${value} < ${node.value} → đi sang trái.` }); node = node.left; }
+        else if (value > node.value) { steps.push({ type: 'visit', id: node.id, text: `${value} > ${node.value} → đi sang phải.` }); node = node.right; }
+        else break;
+      }
+      steps.push({ type: 'notFound', text: `Không tìm thấy ${value} trong cây.` });
+      steps.push({ type: 'done', text: 'Kết thúc.' });
+      return steps;
+    }
+
+    function del(node, target, parentId, side) {
+      if (target < node.value) {
+        steps.push({ type: 'visit', id: node.id, text: `${target} < ${node.value} → đi sang trái.` });
+        node.left = del(node.left, target, node.id, 'left');
+      } else if (target > node.value) {
+        steps.push({ type: 'visit', id: node.id, text: `${target} > ${node.value} → đi sang phải.` });
+        node.right = del(node.right, target, node.id, 'right');
+      } else {
+        steps.push({ type: 'foundTarget', id: node.id, text: `Tìm thấy node cần xóa: ${node.value}.` });
+        if (!node.left || !node.right) {
+          const child = node.left || node.right || null;
+          steps.push({
+            type: 'caseNote',
+            text: !node.left && !node.right ? `Node ${node.value} là lá → xóa trực tiếp.` : `Node ${node.value} chỉ có 1 con → thay thế bằng con đó.`,
+          });
+          steps.push({
+            type: 'setChild', parentId, side, resultId: child ? child.id : null,
+            text: child ? `Gắn ${child.value} vào vị trí của ${node.value}.` : `Vị trí của ${node.value} trở thành NULL.`,
+          });
+          return child;
+        }
+        steps.push({ type: 'caseNote', text: `Node ${node.value} có đủ 2 con → tìm successor.` });
+        let succ = node.right;
+        while (succ.left) {
+          steps.push({ type: 'successorVisit', id: succ.id, text: `Đi tới ${succ.value}, còn con trái → tiếp tục sang trái.` });
+          succ = succ.left;
+        }
+        steps.push({ type: 'successorVisit', id: succ.id, text: `${succ.value} là successor (nhỏ nhất bên cây con phải).` });
+        steps.push({ type: 'copyValue', targetId: node.id, newValue: succ.value, text: `Sao chép ${succ.value} vào node ${node.value}.` });
+        node.value = succ.value;
+        node.right = del(node.right, succ.value, node.id, 'right');
+      }
+
+      updateHeight(node);
+      const balance = getBalance(node);
+      steps.push({ type: 'balanceCheck', id: node.id, balance, text: `Cập nhật lại chiều cao node ${node.value}: BF = ${balance}.` });
+
+      let resultNode = node;
+      if (balance > 1 && getBalance(node.left) >= 0) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value} → trường hợp LL: quay phải.` });
+        resultNode = doRotateRight(node, steps);
+      } else if (balance > 1 && getBalance(node.left) < 0) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con trái lệch phải → trường hợp LR: quay trái tại con trái, rồi quay phải tại đây.` });
+        node.left = doRotateLeft(node.left, steps);
+        resultNode = doRotateRight(node, steps);
+      } else if (balance < -1 && getBalance(node.right) <= 0) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value} → trường hợp RR: quay trái.` });
+        resultNode = doRotateLeft(node, steps);
+      } else if (balance < -1 && getBalance(node.right) > 0) {
+        steps.push({ type: 'rotateNote', id: node.id, text: `BF=${balance} tại ${node.value}, con phải lệch trái → trường hợp RL: quay phải tại con phải, rồi quay trái tại đây.` });
+        node.right = doRotateRight(node.right, steps);
+        resultNode = doRotateLeft(node, steps);
+      }
+      if (resultNode !== node) {
+        steps.push({ type: 'rotated', text: `Đã cân bằng lại. Gốc cây con tại vị trí này bây giờ là ${resultNode.value}.` });
+      }
+      steps.push({ type: 'setChild', parentId, side, resultId: resultNode.id, text: parentId === null ? `Cập nhật root = ${resultNode.value}.` : `Gắn lại ${resultNode.value} vào vị trí cũ.` });
+      return resultNode;
+    }
+
+    del(clone, value, null, null);
+    steps.push({ type: 'done', text: 'Hoàn tất xóa và cân bằng lại cây!' });
+    return steps;
+  }
+
+  // ---- Áp dụng các bước lên cây thật (root/nodeMap) ----
+  function applyStep(s) {
+    switch (s.type) {
+      case 'createNode':
+        nodeMap[s.id] = makeNode(s.id, s.value);
+        nextId = Math.max(nextId, s.id + 1);
+        highlight = { newNode: s.id };
+        break;
+      case 'setChild':
+        if (s.parentId === null) {
+          root = s.resultId === null ? null : nodeMap[s.resultId];
+        } else {
+          nodeMap[s.parentId][s.side] = s.resultId === null ? null : nodeMap[s.resultId];
+        }
+        break;
+      case 'visit':
+        highlight = { current: s.id };
+        break;
+      case 'balanceCheck':
+        highlight = { current: s.id };
+        break;
+      case 'foundTarget':
+        highlight = { target: s.id };
+        break;
+      case 'successorVisit':
+        highlight = { target: highlight.target, successor: s.id };
+        break;
+      case 'copyValue':
+        nodeMap[s.targetId].value = s.newValue;
+        highlight = { target: s.targetId, successor: highlight.successor };
+        break;
+      case 'caseNote':
+      case 'rotateNote':
+      case 'rotated':
+      case 'notFound':
+      case 'done':
+        break;
+    }
+  }
+
+  // ---- Dựng cây ban đầu bằng AVL Insert lặp lại (không hiện từng bước) ----
+  function buildTree() {
+    stopAuto();
+    const values = valuesInput.value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    root = null;
+    nodeMap = {};
+    nextId = 0;
+    const idRef = { next: 0 };
+    values.forEach(v => {
+      buildAVLInsertSteps(root, v, idRef).forEach(step => applyStep(step));
+    });
+    highlight = {};
+    steps = [];
+    stepPos = 0;
+    busy = false;
+    renderTree();
+    setStatus(`Đã dựng cây AVL từ ${values.length} giá trị (đã tự cân bằng).`);
+    stepBtn.disabled = true;
+    runBtn.disabled = true;
+  }
+
+  function layoutTree(node) {
+    let counter = 0;
+    function inorder(nd, depth) {
+      if (!nd) return;
+      inorder(nd.left, depth + 1);
+      nd.x = counter++;
+      nd.y = depth;
+      inorder(nd.right, depth + 1);
+    }
+    inorder(node, 0);
+  }
+  function collectNodes(node, arr) {
+    if (!node) return arr;
+    arr.push(node);
+    collectNodes(node.left, arr);
+    collectNodes(node.right, arr);
+    return arr;
+  }
+
+  function renderTree() {
+    treeSvg.innerHTML = '';
+    if (!root) { treeSvg.setAttribute('width', 200); treeSvg.setAttribute('height', 60); return; }
+    computeHeights(root);
+    layoutTree(root);
+    const nodes = collectNodes(root, []);
+    const maxX = Math.max(...nodes.map(n => n.x));
+    const maxY = Math.max(...nodes.map(n => n.y));
+    const width = MARGIN * 2 + maxX * X_GAP + RADIUS * 2;
+    const height = MARGIN * 2 + maxY * Y_GAP + RADIUS * 2 + 20;
+    treeSvg.setAttribute('width', width);
+    treeSvg.setAttribute('height', height);
+    function px(n) { return MARGIN + RADIUS + n.x * X_GAP; }
+    function py(n) { return MARGIN + RADIUS + n.y * Y_GAP; }
+    const ns = 'http://www.w3.org/2000/svg';
+    nodes.forEach(n => {
+      [n.left, n.right].forEach(child => {
+        if (!child) return;
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', px(n)); line.setAttribute('y1', py(n));
+        line.setAttribute('x2', px(child)); line.setAttribute('y2', py(child));
+        line.setAttribute('stroke', '#c7cad1'); line.setAttribute('stroke-width', 2);
+        treeSvg.appendChild(line);
+      });
+    });
+    nodes.forEach(n => {
+      const balance = getBalance(n);
+      const unbalanced = Math.abs(balance) >= 2;
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', px(n)); circle.setAttribute('cy', py(n)); circle.setAttribute('r', RADIUS);
+      let fill = '#ffffff', stroke = '#c7cad1';
+      if (highlight.target === n.id) { fill = '#ffe3e3'; stroke = '#e03131'; }
+      else if (highlight.successor === n.id) { fill = '#f3e8ff'; stroke = '#ae3ec9'; }
+      else if (highlight.newNode === n.id) { fill = '#e7f0ff'; stroke = '#1971c2'; }
+      else if (highlight.current === n.id) { fill = '#fff3bf'; stroke = '#f08c00'; }
+      circle.setAttribute('fill', fill);
+      circle.setAttribute('stroke', stroke);
+      circle.setAttribute('stroke-width', 2.5);
+      treeSvg.appendChild(circle);
+
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('x', px(n)); text.setAttribute('y', py(n) + 5);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '12');
+      text.setAttribute('font-weight', '700');
+      text.textContent = n.value;
+      treeSvg.appendChild(text);
+
+      const bfText = document.createElementNS(ns, 'text');
+      bfText.setAttribute('x', px(n)); bfText.setAttribute('y', py(n) + RADIUS + 15);
+      bfText.setAttribute('text-anchor', 'middle');
+      bfText.setAttribute('font-size', '10');
+      bfText.setAttribute('font-weight', '700');
+      bfText.setAttribute('fill', unbalanced ? '#e03131' : '#9099a6');
+      bfText.textContent = `BF=${balance}`;
+      treeSvg.appendChild(bfText);
+    });
+  }
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function startOperation(builtSteps) {
+    steps = builtSteps;
+    stepPos = 0;
+    highlight = {};
+    busy = true;
+    renderTree();
+    setStatus('Nhấn "Từng bước" hoặc "Chạy tự động" để xem thao tác diễn ra.');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderTree();
+    setStatus(s.text, s.type === 'done' ? 'done' : (s.type === 'notFound' ? 'error' : ''));
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  buildBtn.addEventListener('click', buildTree);
+  insertBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    const idRef = { next: nextId };
+    startOperation(buildAVLInsertSteps(root, v, idRef));
+  });
+  deleteBtn.addEventListener('click', () => {
+    const v = parseInt(valueInput.value, 10);
+    if (isNaN(v)) return;
+    startOperation(buildAVLDeleteSteps(root, v));
+  });
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  buildTree();
+</script>
+</body>
+</html>

@@ -66,11 +66,11 @@ Cột "Demo" = có cần tạo `demo.html` tương tác hay không (chỉ nội 
 - [x] 31. `31-circular-linked-list` — Danh sách liên kết vòng (giới thiệu) — Demo: có
 
 ### Buổi 8 — Stack
-- [ ] 32. `32-stack-fundamentals` — Khái niệm Stack (LIFO) — Demo: không
-- [ ] 33. `33-stack-array-implementation` — Cài đặt Stack bằng mảng — Demo: có
-- [ ] 34. `34-stack-linked-list-implementation` — Cài đặt Stack bằng DSLK — Demo: có
-- [ ] 35. `35-stack-application-expression-evaluation` — Ứng dụng: Infix ↔ Postfix — Demo: có
-- [ ] 36. `36-stack-application-recursion-removal` — Ứng dụng: khử đệ quy — Demo: có
+- [x] 32. `32-stack-fundamentals` — Khái niệm Stack (LIFO) — Demo: không
+- [x] 33. `33-stack-array-implementation` — Cài đặt Stack bằng mảng — Demo: có
+- [x] 34. `34-stack-linked-list-implementation` — Cài đặt Stack bằng DSLK — Demo: có
+- [x] 35. `35-stack-application-expression-evaluation` — Ứng dụng: Infix ↔ Postfix — Demo: có
+- [x] 36. `36-stack-application-recursion-removal` — Ứng dụng: khử đệ quy — Demo: có
 
 ### Buổi 9 — Queue
 - [ ] 37. `37-queue-fundamentals` — Khái niệm Queue (FIFO) — Demo: không

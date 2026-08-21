@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Infix ↔ Postfix bằng Stack</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+    font-family: ui-monospace, monospace;
+  }
+  .field { min-width: 320px; flex: 2; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .stage-label {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    background: #e7f0ff; color: var(--accent); font-size: 0.78rem; font-weight: 700; margin-bottom: 12px;
+  }
+  .row-title { font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .token-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; min-height: 36px; }
+  .token {
+    padding: 7px 12px; border: 2px solid var(--border); border-radius: 6px;
+    font-family: ui-monospace, monospace; font-weight: 700; background: #fff;
+  }
+  .token.current { border-color: var(--current); background: #fff3bf; }
+  .stack-row { display: flex; gap: 20px; align-items: flex-start; }
+  .stack-col { display: flex; flex-direction: column; }
+  .stack-visual { display: flex; flex-direction: column-reverse; width: 90px; min-height: 40px; }
+  .stack-slot {
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--border); border-top: none; height: 40px;
+    font-family: ui-monospace, monospace; font-weight: 700; background: #fff;
+  }
+  .stack-visual .stack-slot:first-child { border-top: 2px solid var(--border); }
+  .stack-slot.top { border-color: var(--key); background: #e7f0ff; }
+  .stack-empty { font-size: 0.78rem; color: var(--muted); border: 2px dashed var(--border); border-radius: 6px; padding: 10px; text-align:center; width: 90px; }
+  .result-banner {
+    text-align: center; padding: 24px; font-size: 1.6rem; font-weight: 800; color: var(--sorted);
+    background: #d3f9d8; border-radius: 10px;
+  }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 14px; }
+</style>
+</head>
+<body>
+  <h1>Ứng dụng Stack: Infix → Postfix → Tính giá trị</h1>
+  <p class="subtitle">Chuyển đổi biểu thức trung tố sang hậu tố bằng Stack toán tử, rồi tính giá trị hậu tố bằng Stack toán hạng.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Biểu thức Infix (mỗi token cách nhau bởi khoảng trắng)</label>
+        <input type="text" id="exprInput" value="3 + 4 * 2 - ( 1 + 5 ) / 2">
+      </div>
+      <button class="primary" id="initBtn">Bắt đầu</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="150" max="1200" value="450" step="100">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="workPanel"></div>
+
+<script>
+  const exprInput = document.getElementById('exprInput');
+  const initBtn = document.getElementById('initBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const workPanel = document.getElementById('workPanel');
+
+  const PREC = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 3 };
+  const isOperand = t => /^[0-9]+(\.[0-9]+)?$/.test(t);
+
+  let tokens = [];
+  let steps = [];
+  let stepPos = 0;
+
+  let opStack = [];
+  let output = [];
+  let evalStack = [];
+  let currentReadIndex = -1;
+  let stage = 'convert';
+  let finalResult = null;
+  let statusText = '';
+  let statusKind = '';
+  let busy = false;
+
+  // ---- Giải thuật: sinh danh sách các bước cho cả 2 giai đoạn ----
+  function simulate(toks) {
+    const steps = [];
+    const opSt = [];
+    const out = [];
+
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i];
+      steps.push({ phase: 'convert', type: 'read', index: i, text: `Đọc token "${t}".` });
+      if (isOperand(t)) {
+        out.push(t);
+        steps.push({ phase: 'convert', type: 'outputPush', token: t, text: `"${t}" là toán hạng → đưa vào cuối chuỗi postfix.` });
+      } else if (t === '(') {
+        opSt.push(t);
+        steps.push({ phase: 'convert', type: 'opPush', token: t, text: `"(" → đẩy vào ngăn xếp toán tử.` });
+      } else if (t === ')') {
+        while (opSt.length && opSt[opSt.length - 1] !== '(') {
+          const op = opSt.pop();
+          out.push(op);
+          steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Lấy "${op}" từ ngăn xếp đưa vào postfix (đang tìm dấu "(").` });
+        }
+        opSt.pop();
+        steps.push({ phase: 'convert', type: 'discardParen', text: `Gặp "(" tương ứng → loại khỏi ngăn xếp (không đưa vào postfix).` });
+      } else {
+        while (opSt.length && opSt[opSt.length - 1] !== '(' && PREC[opSt[opSt.length - 1]] >= PREC[t]) {
+          const op = opSt.pop();
+          out.push(op);
+          steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Đỉnh ngăn xếp "${op}" có độ ưu tiên ≥ "${t}" → lấy ra đưa vào postfix.` });
+        }
+        opSt.push(t);
+        steps.push({ phase: 'convert', type: 'opPush', token: t, text: `Đẩy "${t}" vào ngăn xếp toán tử.` });
+      }
+    }
+    while (opSt.length) {
+      const op = opSt.pop();
+      out.push(op);
+      steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Hết chuỗi vào → lấy nốt "${op}" từ ngăn xếp đưa vào postfix.` });
+    }
+    steps.push({ phase: 'convert', type: 'convertDone', text: `Hoàn tất chuyển đổi. Postfix: ${out.join(' ')}` });
+
+    const evalSt = [];
+    for (let i = 0; i < out.length; i++) {
+      const t = out[i];
+      steps.push({ phase: 'evaluate', type: 'read', index: i, text: `Đọc token "${t}" trong chuỗi postfix.` });
+      if (isOperand(t)) {
+        evalSt.push(Number(t));
+        steps.push({ phase: 'evaluate', type: 'push', value: Number(t), text: `"${t}" là toán hạng → đẩy vào ngăn xếp toán hạng.` });
+      } else {
+        const b = evalSt.pop();
+        const a = evalSt.pop();
+        let r;
+        switch (t) {
+          case '+': r = a + b; break;
+          case '-': r = a - b; break;
+          case '*': r = a * b; break;
+          case '/': r = a / b; break;
+          case '^': r = Math.pow(a, b); break;
+        }
+        steps.push({ phase: 'evaluate', type: 'pop2', a, b, op: t, text: `Gặp toán tử "${t}" → lấy 2 toán hạng ${b} rồi ${a} ra khỏi ngăn xếp.` });
+        evalSt.push(r);
+        steps.push({ phase: 'evaluate', type: 'push', value: r, text: `Tính ${a} ${t} ${b} = ${r} → đẩy kết quả vào ngăn xếp.` });
+      }
+    }
+    steps.push({ phase: 'evaluate', type: 'evalDone', text: `Hoàn tất tính giá trị. Kết quả cuối cùng = ${evalSt[0]}.` });
+    return steps;
+  }
+
+  function renderStackCol(title, arr, highlightTop) {
+    const items = arr.map((v, i) => {
+      const isTop = i === arr.length - 1;
+      return `<div class="stack-slot ${isTop && highlightTop ? 'top' : ''}">${v}</div>`;
+    }).join('');
+    return `
+      <div class="stack-col">
+        <div class="row-title">${title}</div>
+        ${arr.length ? `<div class="stack-visual">${items}</div>` : `<div class="stack-empty">rỗng</div>`}
+      </div>
+    `;
+  }
+
+  function renderTokenRow(title, arr, highlightIndex) {
+    const chips = arr.map((t, i) => `<div class="token ${i === highlightIndex ? 'current' : ''}">${t}</div>`).join('');
+    return `
+      <div class="row-title">${title}</div>
+      <div class="token-row">${chips.length ? chips : '<span style="color:var(--muted);font-size:0.85rem;">(trống)</span>'}</div>
+    `;
+  }
+
+  function render() {
+    let html = '';
+    if (stage === 'convert') {
+      html += '<div class="stage-label">Giai đoạn 1: Chuyển Infix → Postfix</div>';
+      html += renderTokenRow('Chuỗi vào (Infix)', tokens, currentReadIndex);
+      html += `<div class="stack-row">${renderStackCol('Ngăn xếp toán tử', opStack, true)}<div style="flex:1;">${renderTokenRow('Postfix đang xây dựng', output, -1)}</div></div>`;
+    } else if (stage === 'evaluate') {
+      html += '<div class="stage-label">Giai đoạn 2: Tính giá trị Postfix</div>';
+      html += renderTokenRow('Chuỗi Postfix', output, currentReadIndex);
+      html += `<div class="stack-row">${renderStackCol('Ngăn xếp toán hạng', evalStack, true)}</div>`;
+    } else if (stage === 'result') {
+      html += renderTokenRow('Chuỗi Postfix', output, -1);
+      html += `<div class="result-banner">Kết quả = ${finalResult}</div>`;
+    }
+    workPanel.innerHTML = html;
+
+    const statusEl = document.createElement('div');
+    statusEl.className = 'status' + (statusKind ? ' ' + statusKind : '');
+    statusEl.textContent = statusText;
+    workPanel.appendChild(statusEl);
+  }
+
+  function applyStep(s) {
+    if (s.phase === 'convert') {
+      switch (s.type) {
+        case 'read': currentReadIndex = s.index; break;
+        case 'outputPush': output.push(s.token); break;
+        case 'opPush': opStack.push(s.token); break;
+        case 'opPopToOutput': opStack.pop(); output.push(s.token); break;
+        case 'discardParen': opStack.pop(); break;
+        case 'convertDone': stage = 'evaluate'; currentReadIndex = -1; break;
+      }
+    } else {
+      switch (s.type) {
+        case 'read': currentReadIndex = s.index; break;
+        case 'push': evalStack.push(s.value); break;
+        case 'pop2': evalStack.pop(); evalStack.pop(); break;
+        case 'evalDone':
+          finalResult = evalStack[0];
+          stage = 'result';
+          break;
+      }
+    }
+  }
+
+  function initAll() {
+    tokens = exprInput.value.trim().split(/\s+/).filter(Boolean);
+    steps = simulate(tokens);
+    stepPos = 0;
+    opStack = [];
+    output = [];
+    evalStack = [];
+    currentReadIndex = -1;
+    stage = 'convert';
+    finalResult = null;
+    busy = true;
+    statusText = `Sẵn sàng xử lý biểu thức gồm ${tokens.length} token.`;
+    statusKind = '';
+    render();
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    statusText = s.text;
+    statusKind = (s.type === 'evalDone') ? 'ok' : '';
+    render();
+    stepPos++;
+    if (s.type === 'evalDone') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initAll);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initAll();
+</script>
+</body>
+</html>

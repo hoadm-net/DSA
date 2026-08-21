@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Khử đệ quy — Tháp Hà Nội</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --sorted: #2f9e44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { max-width: 100px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+
+  .layout { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .pegs-panel { flex: 2; min-width: 380px; }
+  .side-panel { flex: 1; min-width: 260px; }
+
+  .hanoi-row { display: flex; gap: 30px; justify-content: center; padding: 10px 0 4px; }
+  .peg-wrap { display: flex; flex-direction: column; align-items: center; }
+  .peg {
+    position: relative; width: 150px; height: 170px;
+    display: flex; flex-direction: column-reverse; align-items: center; padding-bottom: 6px;
+  }
+  .peg::before {
+    content: ''; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    width: 6px; height: 150px; background: #d0d3da; z-index: 0;
+  }
+  .disk {
+    position: relative; z-index: 1; height: 22px; border-radius: 6px; margin-bottom: 3px;
+    display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #fff;
+  }
+  .peg-label { font-weight: 700; color: var(--muted); margin-top: 4px; }
+
+  .row-title { font-size: 0.82rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .frame-list { display: flex; flex-direction: column-reverse; gap: 6px; }
+  .frame {
+    border: 2px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem;
+    font-family: ui-monospace, monospace; background: #fafafa;
+  }
+  .frame.top { border-color: var(--current); background: #fff3bf; }
+  .frame-empty { font-size: 0.8rem; color: var(--muted); }
+
+  .move-log { list-style: decimal; padding-left: 20px; font-size: 0.85rem; max-height: 220px; overflow-y: auto; margin: 0; }
+  .move-log li { margin-bottom: 4px; }
+
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 14px; }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Ứng dụng Stack: khử đệ quy — Tháp Hà Nội</h1>
+  <p class="subtitle">Mỗi khung gọi đệ quy được thay bằng một phần tử trên Stack tường minh, có thêm biến trạng thái (state) đánh dấu vị trí đang xử lý.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Số đĩa (n)</label>
+        <input type="number" id="diskInput" value="3" min="1" max="5">
+      </div>
+      <button class="primary" id="initBtn">Khởi tạo</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="80" max="800" value="250" step="40">
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="panel pegs-panel">
+      <div class="row-title">3 cọc Tháp Hà Nội (chuyển từ A sang C, dùng B làm trung gian)</div>
+      <div class="hanoi-row" id="pegsContainer"></div>
+      <div class="status" id="statusBox">Khởi tạo để bắt đầu.</div>
+    </div>
+
+    <div class="side-panel">
+      <div class="panel">
+        <div class="row-title">Ngăn xếp tường minh (khung trên cùng = đang xử lý)</div>
+        <div class="frame-list" id="frameList"></div>
+      </div>
+      <div class="panel">
+        <div class="row-title">Nhật ký các bước di chuyển</div>
+        <ol class="move-log" id="moveLog"></ol>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const diskInput = document.getElementById('diskInput');
+  const initBtn = document.getElementById('initBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const pegsContainer = document.getElementById('pegsContainer');
+  const frameList = document.getElementById('frameList');
+  const moveLogEl = document.getElementById('moveLog');
+  const statusBox = document.getElementById('statusBox');
+
+  const DISK_COLORS = ['#3b5bdb', '#e8590c', '#2f9e44', '#ae3ec9', '#e03131', '#1971c2'];
+
+  let steps = [];
+  let stepPos = 0;
+  let frameStack = [];
+  let pegs = { A: [], B: [], C: [] };
+  let moveLog = [];
+  let busy = false;
+
+  // ---- Giải thuật: sinh danh sách các bước khử đệ quy Hanoi bằng Stack tường minh ----
+  function simulate(n0, from0, to0, via0) {
+    const steps = [];
+    const stack = [{ n: n0, from: from0, to: to0, via: via0, state: 0 }];
+    steps.push({ type: 'push', frame: { ...stack[0] }, text: `Đẩy khung Hanoi(${n0}, ${from0}, ${to0}, ${via0}) vào ngăn xếp.` });
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top.state === 0) {
+        top.state = 1;
+        steps.push({ type: 'setState', newState: 1, text: `Khung (n=${top.n}, ${top.from}→${top.to} qua ${top.via}) ở state 0 → chuyển sang state 1 (chuẩn bị lời gọi đệ quy thứ 1).` });
+        if (top.n > 0) {
+          const nf = { n: top.n - 1, from: top.from, to: top.via, via: top.to, state: 0 };
+          stack.push(nf);
+          steps.push({ type: 'push', frame: { ...nf }, text: `Lời gọi đệ quy thứ 1 → đẩy khung Hanoi(${nf.n}, ${nf.from}, ${nf.to}, ${nf.via}).` });
+        } else {
+          steps.push({ type: 'note', text: 'n = 0 (trường hợp cơ sở) → không có lời gọi đệ quy nào.' });
+        }
+      } else if (top.state === 1) {
+        if (top.n > 0) {
+          steps.push({ type: 'move', disk: top.n, from: top.from, to: top.to, newState: 2, text: `Khung (n=${top.n}) ở state 1 → in "Chuyển đĩa ${top.n} từ ${top.from} sang ${top.to}", chuyển sang state 2.` });
+          const nf = { n: top.n - 1, from: top.via, to: top.to, via: top.from, state: 0 };
+          stack.push(nf);
+          steps.push({ type: 'push', frame: { ...nf }, text: `Lời gọi đệ quy thứ 2 → đẩy khung Hanoi(${nf.n}, ${nf.from}, ${nf.to}, ${nf.via}).` });
+        } else {
+          steps.push({ type: 'note', newState: 2, text: 'n = 0 → không in gì, không có lời gọi đệ quy thứ 2. Chuyển sang state 2.' });
+        }
+        top.state = 2;
+      } else {
+        steps.push({ type: 'pop', text: `Khung (n=${top.n}, ${top.from}→${top.to}) đã hoàn tất cả 2 lời gọi đệ quy → lấy ra khỏi ngăn xếp.` });
+        stack.pop();
+      }
+    }
+    steps.push({ type: 'done', text: 'Ngăn xếp rỗng → hoàn tất! Kết quả giống hệt bản đệ quy gốc.' });
+    return steps;
+  }
+
+  function diskColor(d) { return DISK_COLORS[(d - 1) % DISK_COLORS.length]; }
+
+  function renderPegs() {
+    pegsContainer.innerHTML = '';
+    ['A', 'B', 'C'].forEach(key => {
+      const wrap = document.createElement('div');
+      wrap.className = 'peg-wrap';
+      const peg = document.createElement('div');
+      peg.className = 'peg';
+      pegs[key].forEach(d => {
+        const disk = document.createElement('div');
+        disk.className = 'disk';
+        disk.style.width = (40 + d * 16) + 'px';
+        disk.style.background = diskColor(d);
+        disk.textContent = d;
+        peg.appendChild(disk);
+      });
+      wrap.appendChild(peg);
+      const label = document.createElement('div');
+      label.className = 'peg-label';
+      label.textContent = key;
+      wrap.appendChild(label);
+      pegsContainer.appendChild(wrap);
+    });
+  }
+
+  function renderFrames() {
+    if (frameStack.length === 0) {
+      frameList.innerHTML = '<div class="frame-empty">(ngăn xếp rỗng)</div>';
+      return;
+    }
+    frameList.innerHTML = frameStack.map((f, i) => {
+      const isTop = i === frameStack.length - 1;
+      return `<div class="frame ${isTop ? 'top' : ''}">Hanoi(n=${f.n}, ${f.from}→${f.to} qua ${f.via}) — state ${f.state}</div>`;
+    }).join('');
+  }
+
+  function renderMoveLog() {
+    moveLogEl.innerHTML = moveLog.map(m => `<li>${m}</li>`).join('');
+  }
+
+  function setStatus(text, isDone) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (isDone ? ' done' : '');
+  }
+
+  function applyStep(s) {
+    switch (s.type) {
+      case 'push':
+        frameStack.push({ ...s.frame });
+        break;
+      case 'setState':
+        frameStack[frameStack.length - 1].state = s.newState;
+        break;
+      case 'move': {
+        frameStack[frameStack.length - 1].state = s.newState;
+        const d = pegs[s.from].pop();
+        pegs[s.to].push(d);
+        moveLog.push(`Đĩa ${s.disk}: ${s.from} → ${s.to}`);
+        break;
+      }
+      case 'note':
+        if (s.newState !== undefined) frameStack[frameStack.length - 1].state = s.newState;
+        break;
+      case 'pop':
+        frameStack.pop();
+        break;
+      case 'done':
+        break;
+    }
+  }
+
+  function initAll() {
+    stopAuto();
+    const n = Math.max(1, Math.min(5, parseInt(diskInput.value, 10) || 3));
+    diskInput.value = n;
+    steps = simulate(n, 'A', 'C', 'B');
+    stepPos = 0;
+    frameStack = [];
+    pegs = { A: [], B: [], C: [] };
+    for (let d = n; d >= 1; d--) pegs.A.push(d);
+    moveLog = [];
+    busy = true;
+    renderPegs();
+    renderFrames();
+    renderMoveLog();
+    setStatus(`Sẵn sàng khử đệ quy Hanoi với ${n} đĩa.`);
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function step() {
+    if (!busy || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    applyStep(s);
+    renderPegs();
+    renderFrames();
+    renderMoveLog();
+    setStatus(s.text, s.type === 'done');
+    stepPos++;
+    if (s.type === 'done') {
+      busy = false;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  let autoTimer = null;
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      step();
+      if (!busy) stopAuto();
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  initBtn.addEventListener('click', initAll);
+  stepBtn.addEventListener('click', step);
+  runBtn.addEventListener('click', runAuto);
+
+  initAll();
+</script>
+</body>
+</html>

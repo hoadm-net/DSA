@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Stack bằng mảng</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --swap: #e03131;
+    --key: #1971c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .layout { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls { width: 300px; flex-shrink: 0; }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    margin-bottom: 12px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field input[type="text"], .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+  .field { flex: 1; min-width: 100px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.full { width: 100%; }
+  .stack-panel { flex: 1; min-width: 260px; }
+  .stack-visual { display: flex; flex-direction: column-reverse; width: 160px; margin: 0 auto; }
+  .slot {
+    display: flex;
+    align-items: center;
+    border: 2px solid var(--border);
+    border-top: none;
+    height: 46px;
+    position: relative;
+    background: #fafafa;
+  }
+  .stack-visual .slot:first-child { border-top: 2px solid var(--border); }
+  .slot .idx {
+    width: 30px; text-align: center; font-size: 0.72rem; color: var(--muted); border-right: 1px solid var(--border); height: 100%; display: flex; align-items: center; justify-content: center;
+  }
+  .slot .val { flex: 1; text-align: center; font-weight: 700; }
+  .slot.filled { background: #fff; }
+  .slot.current { background: #fff3bf; border-color: var(--current); }
+  .top-marker {
+    position: absolute; left: 100%; margin-left: 10px; font-size: 0.78rem; font-weight: 700; color: var(--current); white-space: nowrap;
+  }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 14px; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
+  .status.ok { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Cài đặt Stack bằng mảng</h1>
+  <p class="subtitle">Push tăng top rồi ghi giá trị; Pop lấy giá trị tại top rồi giảm top. Overflow khi đầy, Underflow khi rỗng.</p>
+
+  <div class="layout">
+    <div class="panel controls">
+      <div class="controls-row">
+        <div class="field">
+          <label>Dung lượng (capacity)</label>
+          <input type="number" id="capacityInput" value="6" min="1" max="12">
+        </div>
+      </div>
+      <button class="primary full" id="initBtn">Khởi tạo Stack</button>
+      <hr style="margin:16px 0;border-color:var(--border);">
+      <div class="controls-row">
+        <div class="field">
+          <label>Giá trị</label>
+          <input type="text" id="valueInput" value="5">
+        </div>
+      </div>
+      <div class="controls-row">
+        <button id="pushBtn">Push</button>
+        <button id="popBtn">Pop</button>
+        <button id="topBtn">Top (Peek)</button>
+      </div>
+    </div>
+
+    <div class="panel stack-panel">
+      <div class="stack-visual" id="stackVisual"></div>
+      <div class="status" id="statusBox">Khởi tạo stack để bắt đầu.</div>
+    </div>
+  </div>
+
+<script>
+  const capacityInput = document.getElementById('capacityInput');
+  const valueInput = document.getElementById('valueInput');
+  const initBtn = document.getElementById('initBtn');
+  const pushBtn = document.getElementById('pushBtn');
+  const popBtn = document.getElementById('popBtn');
+  const topBtn = document.getElementById('topBtn');
+  const stackVisual = document.getElementById('stackVisual');
+  const statusBox = document.getElementById('statusBox');
+
+  let capacity = 6;
+  let items = [];
+  let top = -1;
+  let flashIndex = -1;
+
+  function setStatus(text, kind) {
+    statusBox.textContent = text;
+    statusBox.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function render() {
+    stackVisual.innerHTML = '';
+    for (let i = 0; i < capacity; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      if (i <= top) slot.classList.add('filled');
+      if (i === flashIndex) slot.classList.add('current');
+      const isTop = i === top;
+      slot.innerHTML = `
+        <div class="idx">${i}</div>
+        <div class="val">${i <= top ? items[i] : ''}</div>
+        ${isTop ? '<div class="top-marker">← top</div>' : ''}
+      `;
+      stackVisual.appendChild(slot);
+    }
+    if (top === -1) {
+      const emptyLabel = document.createElement('div');
+      emptyLabel.style.textAlign = 'center';
+      emptyLabel.style.fontSize = '0.78rem';
+      emptyLabel.style.color = 'var(--muted)';
+      emptyLabel.style.marginTop = '6px';
+      emptyLabel.textContent = 'top = -1 (rỗng)';
+      stackVisual.parentElement.insertBefore(emptyLabel, stackVisual.nextSibling);
+    }
+  }
+
+  function initStack() {
+    capacity = Math.max(1, Math.min(12, parseInt(capacityInput.value, 10) || 6));
+    capacityInput.value = capacity;
+    items = new Array(capacity).fill(undefined);
+    top = -1;
+    flashIndex = -1;
+    render();
+    setStatus(`Đã khởi tạo stack với dung lượng ${capacity}.`);
+  }
+
+  function push() {
+    const v = valueInput.value.trim() || '0';
+    if (top === capacity - 1) {
+      setStatus(`Overflow! Stack đã đầy (capacity = ${capacity}), không thể Push thêm.`, 'error');
+      return;
+    }
+    top++;
+    items[top] = v;
+    flashIndex = top;
+    render();
+    setStatus(`Push(${v}) → top = ${top}, items[${top}] = ${v}.`, 'ok');
+  }
+
+  function pop() {
+    if (top === -1) {
+      setStatus('Underflow! Stack đang rỗng, không thể Pop.', 'error');
+      return;
+    }
+    const v = items[top];
+    flashIndex = top;
+    render();
+    setStatus(`Pop() → lấy items[${top}] = ${v}, sau đó top giảm còn ${top - 1}.`, 'ok');
+    top--;
+    flashIndex = -1;
+    setTimeout(render, 10);
+  }
+
+  function peek() {
+    if (top === -1) {
+      setStatus('Stack đang rỗng, Top() không có giá trị để xem.', 'error');
+      return;
+    }
+    flashIndex = top;
+    render();
+    setStatus(`Top() → items[${top}] = ${items[top]} (không thay đổi top).`, 'ok');
+  }
+
+  initBtn.addEventListener('click', initStack);
+  pushBtn.addEventListener('click', push);
+  popBtn.addEventListener('click', pop);
+  topBtn.addEventListener('click', peek);
+
+  initStack();
+</script>
+</body>
+</html>

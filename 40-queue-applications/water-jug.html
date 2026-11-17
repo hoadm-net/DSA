@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Queue: bài toán đong nước (BFS)</title>
+<style>
+  :root { --bg:#f7f7fb; --panel:#fff; --text:#1f2430; --muted:#6b7280; --border:#e2e4ea; --accent:#3b5bdb; --ok:#2f9e44; --bad:#e03131; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .subtitle { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin-bottom:16px; }
+  .controls-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:8px; }
+  .field label { display:block; font-size:.82rem; color:var(--muted); margin-bottom:4px; }
+  .field input { padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:.9rem; width:90px; }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-size:.88rem; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .speed-row { display:flex; align-items:center; gap:8px; font-size:.85rem; color:var(--muted); }
+  .row-title { font-size:.82rem; color:var(--muted); margin-bottom:6px; font-weight:600; }
+  .queue-row { display:flex; gap:6px; flex-wrap:wrap; min-height:44px; margin-bottom:16px; }
+  .chip { padding:7px 12px; border:2px solid var(--border); border-radius:999px; font-weight:700; font-size:.85rem; background:#fff; }
+  .chip.cur { border-color:var(--accent); background:#e7f0ff; }
+  .chip.goal { border-color:var(--ok); background:#d3f9d8; color:var(--ok); }
+  .jugs { display:flex; gap:28px; margin-bottom:16px; align-items:flex-end; }
+  .jug { text-align:center; font-size:.85rem; font-weight:600; }
+  .jug .glass { width:70px; border:3px solid #495057; border-top:none; border-radius:0 0 10px 10px; position:relative; background:#fff; margin:0 auto 4px; overflow:hidden; }
+  .jug .water { position:absolute; bottom:0; left:0; right:0; background:#74c0fc; transition:height .25s; }
+  .path { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .path .chip.goal { border-color:var(--ok); }
+  .mini { display:inline-flex; gap:4px; padding:5px 6px 3px; border:2px solid var(--border); border-radius:8px; background:#fff; align-items:flex-end; vertical-align:middle; }
+  .mini.cur { border-color:var(--accent); background:#e7f0ff; }
+  .mini.goal { border-color:var(--ok); background:#d3f9d8; }
+  .mini .g { display:block; width:22px; border:2px solid #495057; border-top:none; border-radius:0 0 5px 5px; position:relative; background:#fff; overflow:hidden; }
+  .mini .g i { position:absolute; bottom:0; left:0; right:0; background:#74c0fc; }
+  .mini .g b { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.7rem; z-index:1; }
+  .step { display:flex; flex-direction:column; align-items:center; font-size:.72rem; color:var(--muted); gap:2px; }
+  .added { display:flex; flex-wrap:wrap; gap:4px; }
+  .arrow { color:var(--muted); font-size:.8rem; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  .status { font-size:.95rem; padding:10px 12px; border-radius:8px; background:#f1f3f5; min-height:20px; margin-top:10px; }
+  .status.done { background:#d3f9d8; color:#2b8a3e; }
+  .status.bad { background:#ffe3e3; color:#c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Bài toán đong nước bằng BFS (Queue)</h1>
+  <p class="subtitle">Trạng thái là cặp (a, b) = lượng nước trong hai bình. Dùng Queue duyệt theo từng mức và tập "đã thăm" để không lặp vô hạn; lời giải tìm được chắc chắn ngắn nhất.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field"><label>Dung tích bình A</label><input type="number" id="capA" value="3" min="1" max="12"></div>
+      <div class="field"><label>Dung tích bình B</label><input type="number" id="capB" value="5" min="1" max="12"></div>
+      <div class="field"><label>Cần đong</label><input type="number" id="target" value="4" min="0" max="24"></div>
+      <button class="primary" id="initBtn">Bắt đầu</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">Tốc độ: <input type="range" id="speed" min="100" max="1200" value="500" step="50"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row-title">Trạng thái đang xét</div>
+    <div class="jugs" id="jugs"></div>
+
+    <div class="row-title">Queue (front bên trái)</div>
+    <div class="queue-row" id="queueRow"></div>
+
+    <div class="row-title">Đã thăm (visited)</div>
+    <div class="queue-row" id="visitedRow"></div>
+
+    <div class="row-title">Đường đi ngắn nhất</div>
+    <div class="path queue-row" id="pathRow"></div>
+
+    <table id="log"><thead><tr><th>Lấy ra</th><th>Mức</th><th>Trạng thái mới được thêm</th></tr></thead><tbody></tbody></table>
+    <div class="status" id="statusBox"></div>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let opName, A, B, T, queue, visited, parent, level, current, finished, timer;
+
+  const key = s => s[0] + ',' + s[1];
+  const show = s => `(${s[0]}, ${s[1]})`;
+
+  function neighbors(s) {
+    const [a, b] = s;
+    const toB = Math.min(a, B - b), toA = Math.min(b, A - a);
+    return [
+      [[A, b], 'đổ đầy A'], [[a, B], 'đổ đầy B'],
+      [[0, b], 'đổ hết A'], [[a, 0], 'đổ hết B'],
+      [[a - toB, b + toB], 'rót A → B'], [[a + toA, b - toA], 'rót B → A'],
+    ];
+  }
+
+  function mini(s, cls) {
+    const d = document.createElement('span');
+    d.className = 'mini ' + (cls || '');
+    d.title = show(s);
+    [[A, s[0]], [B, s[1]]].forEach(([cap, v]) => {
+      const g = document.createElement('span');
+      g.className = 'g';
+      g.style.height = cap * 9 + 'px';
+      g.innerHTML = `<i style="height:${v / cap * 100}%"></i><b>${v}</b>`;
+      d.appendChild(g);
+    });
+    return d;
+  }
+
+  function chips(el, arr, cls) {
+    el.innerHTML = '';
+    arr.forEach((s, i) => el.appendChild(mini(s, cls ? cls(s, i) : '')));
+  }
+
+  function isGoal(s) { return s[0] === T || s[1] === T; }
+
+  function drawJugs(s) {
+    $('jugs').innerHTML = '';
+    if (!s) return;
+    [['A', A, s[0]], ['B', B, s[1]]].forEach(([name, cap, v]) => {
+      const j = document.createElement('div');
+      j.className = 'jug';
+      j.innerHTML = `<div class="glass" style="height:${cap * 18}px"><div class="water" style="height:${v / cap * 100}%"></div></div>${name}: ${v}/${cap}`;
+      $('jugs').appendChild(j);
+    });
+  }
+
+  function render() {
+    drawJugs(current);
+    chips($('queueRow'), queue, (s, i) => (i === 0 ? 'cur' : ''));
+    chips($('visitedRow'), [...visited.keys()].map(k => k.split(',').map(Number)));
+  }
+
+  function status(msg, cls) { $('statusBox').textContent = msg; $('statusBox').className = 'status' + (cls ? ' ' + cls : ''); }
+
+  function showPath(goal) {
+    const path = [];
+    for (let k = key(goal); k !== null; k = parent.get(k)) path.unshift([k.split(',').map(Number), opName.get(k) || 'bắt đầu']);
+    const row = $('pathRow');
+    row.innerHTML = '';
+    path.forEach(([s, op], i) => {
+      if (i) { const a = document.createElement('span'); a.className = 'arrow'; a.textContent = '→'; row.appendChild(a); }
+      const d = document.createElement('div');
+      d.className = 'step';
+      d.appendChild(mini(s, i === path.length - 1 ? 'goal' : ''));
+      d.appendChild(document.createTextNode(op));
+      row.appendChild(d);
+    });
+    return path.length - 1;
+  }
+
+  function init() {
+    stop();
+    A = Math.max(1, +$('capA').value || 1);
+    B = Math.max(1, +$('capB').value || 1);
+    T = Math.max(0, +$('target').value || 0);
+    const start = [0, 0];
+    queue = [start]; visited = new Map([[key(start), true]]);
+    parent = new Map([[key(start), null]]); opName = new Map(); level = new Map([[key(start), 0]]);
+    current = null; finished = false;
+    $('log').tBodies[0].innerHTML = ''; $('pathRow').innerHTML = '';
+    render();
+    status(`Bình A=${A}, B=${B}, cần ${T} lít. Bắt đầu từ (0, 0).`);
+    if (T > Math.max(A, B)) { finished = true; status(`Không thể đong ${T} lít: lớn hơn dung tích bình lớn nhất.`, 'bad'); }
+  }
+
+  function step() {
+    if (finished) return false;
+    if (!queue.length) {
+      finished = true; current = null; render();
+      status(`Queue rỗng mà chưa gặp ${T} lít → không có lời giải.`, 'bad');
+      return false;
+    }
+    current = queue.shift();
+    const lv = level.get(key(current));
+    const added = [];
+    if (isGoal(current)) {
+      finished = true;
+      const n = showPath(current);
+      render();
+      status(`Gặp ${show(current)} có ${T} lít ở mức ${lv} → lời giải ngắn nhất gồm ${n} bước.`, 'done');
+      addLog(current, lv, []);
+      return true;
+    }
+    for (const [s, op] of neighbors(current)) {
+      const k = key(s);
+      if (!visited.has(k)) {
+        visited.set(k, true); parent.set(k, key(current)); level.set(k, lv + 1); opName.set(k, op);
+        queue.push(s); added.push(s);
+      }
+    }
+    addLog(current, lv, added);
+    render();
+    status(`dequeue ${show(current)} (mức ${lv}); thêm ${added.length} trạng thái mới chưa thăm.`);
+    return true;
+  }
+
+  function addLog(s, lv, added) {
+    const tr = document.createElement('tr');
+    const c1 = document.createElement('td'), c2 = document.createElement('td'), c3 = document.createElement('td');
+    c1.appendChild(mini(s, isGoal(s) ? 'goal' : 'cur'));
+    c2.textContent = lv;
+    const wrap = document.createElement('div'); wrap.className = 'added'; c3.appendChild(wrap);
+    if (added.length) added.forEach(a => wrap.appendChild(mini(a))); else c3.textContent = isGoal(s) ? '(đích)' : '—';
+    tr.append(c1, c2, c3);
+    $('log').tBodies[0].appendChild(tr);
+  }
+
+  function stop() { clearInterval(timer); timer = null; $('runBtn').textContent = 'Chạy tự động'; }
+  function startTimer() { timer = setInterval(() => { if (!step()) stop(); }, +$('speed').value); }
+
+  $('initBtn').onclick = () => { init(); if (!finished) { $('runBtn').textContent = 'Tạm dừng'; startTimer(); } };
+  $('stepBtn').onclick = () => { stop(); step(); };
+  $('runBtn').onclick = () => { if (timer) { stop(); return; } $('runBtn').textContent = 'Tạm dừng'; startTimer(); };
+  $('speed').oninput = () => { if (timer) { clearInterval(timer); startTimer(); } };
+  init();
+</script>
+</body>
+</html>

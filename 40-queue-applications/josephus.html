@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Queue: bài toán Josephus / chuyền khoai nóng</title>
+<style>
+  :root { --bg:#f7f7fb; --panel:#fff; --text:#1f2430; --muted:#6b7280; --border:#e2e4ea; --accent:#3b5bdb; --ok:#2f9e44; --bad:#e03131; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .subtitle { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin-bottom:16px; }
+  .controls-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:8px; }
+  .field { min-width:100px; }
+  .field label { display:block; font-size:.82rem; color:var(--muted); margin-bottom:4px; }
+  .field input { padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:.9rem; width:110px; }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-size:.88rem; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .speed-row { display:flex; align-items:center; gap:8px; font-size:.85rem; color:var(--muted); }
+  .row-title { font-size:.82rem; color:var(--muted); margin-bottom:6px; font-weight:600; }
+  .queue-row { display:flex; gap:6px; flex-wrap:wrap; min-height:44px; margin-bottom:16px; }
+  .chip { padding:7px 12px; border:2px solid var(--border); border-radius:999px; font-weight:700; font-size:.85rem; background:#fff; }
+  .chip.holder { border-color:var(--accent); background:#e7f0ff; }
+  .chip.out { border-color:var(--bad); background:#ffe3e3; color:var(--bad); }
+  .chip.win { border-color:var(--ok); background:#d3f9d8; color:var(--ok); }
+  .status { font-size:.95rem; padding:10px 12px; border-radius:8px; background:#f1f3f5; min-height:20px; margin-top:10px; }
+  .status.done { background:#d3f9d8; color:#2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Bài toán Josephus / chuyền khoai nóng</h1>
+  <p class="subtitle">n người đứng thành vòng tròn (Queue). Mỗi lượt chuyền khoai k−1 lần: dequeue rồi enqueue lại ở cuối. Người cầm khoai ở lượt thứ k bị dequeue và bị loại. Người cuối cùng thắng.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field"><label>Số người n</label><input type="number" id="nInput" value="7" min="1" max="30"></div>
+      <div class="field"><label>Bước đếm k</label><input type="number" id="kInput" value="3" min="1" max="30"></div>
+      <button class="primary" id="initBtn">Bắt đầu</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">Tốc độ: <input type="range" id="speed" min="100" max="1200" value="450" step="50"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row-title">Hàng đợi vòng tròn (front bên trái = người đang cầm khoai)</div>
+    <div class="queue-row" id="queueRow"></div>
+    <div class="row-title">Thứ tự bị loại</div>
+    <div class="queue-row" id="outRow"></div>
+    <div class="status" id="statusBox"></div>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let queue = [], out = [], k = 3, count = 0, timer = null, finished = false;
+
+  function chips(el, arr, cls) {
+    el.innerHTML = '';
+    arr.forEach((p, i) => {
+      const d = document.createElement('div');
+      d.className = 'chip ' + (cls ? cls(i) : '');
+      d.textContent = p;
+      el.appendChild(d);
+    });
+  }
+
+  function render() {
+    chips($('queueRow'), queue, i => finished ? 'win' : (i === 0 ? 'holder' : ''));
+    chips($('outRow'), out, () => 'out');
+  }
+
+  function status(msg, done) { $('statusBox').textContent = msg; $('statusBox').className = 'status' + (done ? ' done' : ''); }
+
+  function init() {
+    stop();
+    const n = Math.max(1, Math.min(30, +$('nInput').value || 1));
+    k = Math.max(1, Math.min(30, +$('kInput').value || 1));
+    queue = Array.from({ length: n }, (_, i) => i + 1);
+    out = []; count = 0; finished = n === 1;
+    render();
+    status(finished ? `Chỉ có 1 người: ${queue[0]} thắng.` : `n=${n}, k=${k}. Người 1 cầm khoai, bắt đầu đếm.`, finished);
+  }
+
+  function step() {
+    if (finished) return false;
+    const p = queue.shift();
+    count++;
+    if (count === k) {
+      out.push(p); count = 0;
+      status(`Đếm ${k}/${k}: dequeue(${p}) và loại khỏi vòng.`);
+      if (queue.length === 1) {
+        finished = true;
+        status(`Người sống sót cuối cùng: ${queue[0]}.`, true);
+      }
+    } else {
+      queue.push(p);
+      status(`Đếm ${count}/${k}: dequeue(${p}) rồi enqueue(${p}) về cuối hàng.`);
+    }
+    render();
+    return true;
+  }
+
+  function stop() { clearInterval(timer); timer = null; $('runBtn').textContent = 'Chạy tự động'; }
+
+  $('initBtn').onclick = init;
+  $('stepBtn').onclick = () => { stop(); step(); };
+  $('runBtn').onclick = () => {
+    if (timer) { stop(); return; }
+    $('runBtn').textContent = 'Tạm dừng';
+    timer = setInterval(() => { if (!step()) stop(); }, +$('speed').value);
+  };
+  $('speed').oninput = () => { if (timer) { clearInterval(timer); timer = setInterval(() => { if (!step()) stop(); }, +$('speed').value); } };
+  init();
+</script>
+</body>
+</html>

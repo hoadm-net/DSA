@@ -72,7 +72,9 @@
     position: relative;
     background: #fafafa;
   }
-  .stack-visual .slot:first-child { border-top: 2px solid var(--border); }
+  /* column-reverse: phần tử cuối nằm trên cùng nên cần viền trên */
+  .stack-visual .slot:last-child { border-top: 2px solid var(--border); }
+  .empty-label { text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
   .slot .idx {
     width: 30px; text-align: center; font-size: 0.72rem; color: var(--muted); border-right: 1px solid var(--border); height: 100%; display: flex; align-items: center; justify-content: center;
   }
@@ -116,11 +118,14 @@
 
     <div class="panel stack-panel">
       <div class="stack-visual" id="stackVisual"></div>
+      <div class="empty-label" id="emptyLabel">top = -1 (rỗng)</div>
       <div class="status" id="statusBox">Khởi tạo stack để bắt đầu.</div>
     </div>
   </div>
 
 <script>
+// Bọc trong IIFE: biến toàn cục tên `top` sẽ đụng với window.top (không ghi đè được) và làm hỏng cả script.
+(function () {
   const capacityInput = document.getElementById('capacityInput');
   const valueInput = document.getElementById('valueInput');
   const initBtn = document.getElementById('initBtn');
@@ -129,6 +134,7 @@
   const topBtn = document.getElementById('topBtn');
   const stackVisual = document.getElementById('stackVisual');
   const statusBox = document.getElementById('statusBox');
+  const emptyLabel = document.getElementById('emptyLabel');
 
   let capacity = 6;
   let items = [];
@@ -155,15 +161,7 @@
       `;
       stackVisual.appendChild(slot);
     }
-    if (top === -1) {
-      const emptyLabel = document.createElement('div');
-      emptyLabel.style.textAlign = 'center';
-      emptyLabel.style.fontSize = '0.78rem';
-      emptyLabel.style.color = 'var(--muted)';
-      emptyLabel.style.marginTop = '6px';
-      emptyLabel.textContent = 'top = -1 (rỗng)';
-      stackVisual.parentElement.insertBefore(emptyLabel, stackVisual.nextSibling);
-    }
+    emptyLabel.style.display = top === -1 ? 'block' : 'none';
   }
 
   function initStack() {
@@ -187,6 +185,12 @@
     flashIndex = top;
     render();
     setStatus(`Push(${v}) → top = ${top}, items[${top}] = ${v}.`, 'ok');
+    // Gợi ý sẵn giá trị ngẫu nhiên cho lần Push tiếp theo (vẫn sửa tay được)
+    valueInput.value = randomValue();
+  }
+
+  function randomValue() {
+    return String(Math.floor(Math.random() * 99) + 1);
   }
 
   function pop() {
@@ -217,8 +221,11 @@
   pushBtn.addEventListener('click', push);
   popBtn.addEventListener('click', pop);
   topBtn.addEventListener('click', peek);
+  // Bấm vào ô là chọn hết, gõ đè luôn cho nhanh
+  valueInput.addEventListener('focus', () => valueInput.select());
 
   initStack();
+})();
 </script>
 </body>
 </html>

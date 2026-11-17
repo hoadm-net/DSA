@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Bố cục bộ nhớ chương trình</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --pop: #e03131;
+    --sorted: #2f9e44;
+    --text-seg: #495057;
+    --data-seg: #2f9e44;
+    --bss-seg: #1c7ed6;
+    --heap-seg: #f08c00;
+    --stack-seg: #ae3ec9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  /* --- Address space bar --- */
+  .segments {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    height: 56px;
+    font-size: 0.75rem;
+  }
+  .segments .seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 600;
+    text-align: center;
+    padding: 4px;
+    transition: filter 0.2s;
+  }
+  .seg.text { background: var(--text-seg); flex: 1.1; }
+  .seg.data { background: var(--data-seg); flex: 1; }
+  .seg.bss { background: var(--bss-seg); flex: 1; }
+  .seg.heap { background: var(--heap-seg); flex: 1.6; }
+  .seg.stack { background: var(--stack-seg); flex: 1.6; }
+  .seg.hl { filter: brightness(1.25); box-shadow: inset 0 0 0 3px #fff8; }
+  .addr-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.78rem; color: var(--muted); margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* --- Variable classification playground --- */
+  .var-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .var-btn {
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #f8f9fb;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .var-btn:hover { border-color: var(--accent); }
+  .var-btn.chosen { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .var-explain {
+    font-size: 0.88rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f3f5;
+    min-height: 20px;
+  }
+
+  /* --- Stack frame simulator --- */
+  .controls-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+  select, input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.88rem;
+  }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .stack-view {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    min-height: 260px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    background: #fafbfc;
+  }
+  .frame {
+    border: 2px solid var(--stack-seg);
+    background: #f3e8fb;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-family: "SF Mono", Consolas, monospace;
+    animation: slideIn 0.25s ease-out;
+  }
+  .frame.top { border-color: var(--current); background: #fff3e0; }
+  .frame .fn-name { font-weight: 700; color: var(--stack-seg); }
+  .frame.top .fn-name { color: var(--current); }
+  .frame .line { color: var(--muted); margin-top: 2px; }
+  @keyframes slideIn {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .empty-note { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 20px; }
+
+  .status {
+    font-size: 0.9rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f3f5;
+    min-height: 20px;
+    margin-top: 12px;
+  }
+  .status.done { background: #d3f9d8; color: #2b8a3e; }
+  .status.warn { background: #ffe3e3; color: #c92a2a; }
+
+  code.inline { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+</style>
+</head>
+<body>
+  <h1>Bố cục bộ nhớ của một chương trình</h1>
+  <p class="subtitle">Text / Data / BSS / Heap / Stack — và mô phỏng push/pop stack frame khi gọi hàm (kể cả đệ quy).</p>
+
+  <!-- ============ PHẦN 1: SƠ ĐỒ SEGMENT ============ -->
+  <div class="panel">
+    <h2>1. Không gian địa chỉ của chương trình</h2>
+    <div class="segments" id="segmentsBar">
+      <div class="seg text" data-seg="text">Text<br>(code)</div>
+      <div class="seg data" data-seg="data">Data<br>(đã khởi tạo)</div>
+      <div class="seg bss" data-seg="bss">BSS<br>(chưa khởi tạo)</div>
+      <div class="seg heap" data-seg="heap">Heap<br>(cấp phát động) →</div>
+      <div class="seg stack" data-seg="stack">← Stack<br>(lời gọi hàm)</div>
+    </div>
+    <div class="addr-labels">
+      <span>Địa chỉ thấp</span>
+      <span>Địa chỉ cao</span>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--text-seg)"></span> Text: mã lệnh, chỉ đọc</span>
+      <span><span class="dot" style="background:var(--data-seg)"></span> Data: static/global đã khởi tạo</span>
+      <span><span class="dot" style="background:var(--bss-seg)"></span> BSS: static/global chưa khởi tạo</span>
+      <span><span class="dot" style="background:var(--heap-seg)"></span> Heap: cấp phát động (new/malloc)</span>
+      <span><span class="dot" style="background:var(--stack-seg)"></span> Stack: biến cục bộ, stack frame</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- ============ PHẦN 2: PHÂN LOẠI BIẾN ============ -->
+    <div class="panel">
+      <h2>2. Biến này nằm ở segment nào?</h2>
+      <p class="subtitle" style="margin-bottom:12px;">Bấm vào từng khai báo để xem nó thuộc segment nào và vì sao.</p>
+      <div class="var-btns" id="varBtns"></div>
+      <div class="var-explain" id="varExplain">Chọn một khai báo phía trên.</div>
+    </div>
+
+    <!-- ============ PHẦN 3: MÔ PHỎNG STACK FRAME ============ -->
+    <div class="panel">
+      <h2>3. Mô phỏng Stack khi gọi hàm</h2>
+      <div class="controls-row">
+        <select id="scenarioSelect">
+          <option value="nested">Gọi hàm lồng nhau: Main → A → B</option>
+          <option value="recursion">Đệ quy: Factorial(4)</option>
+          <option value="overflow">Đệ quy không dừng (mô phỏng Stack Overflow)</option>
+        </select>
+        <button id="stepBtn" class="primary">Từng bước</button>
+        <button id="runBtn">Chạy tự động</button>
+        <button id="resetSimBtn">Reset</button>
+      </div>
+      <div class="stack-view" id="stackView">
+        <div class="empty-note">Stack rỗng — bấm "Từng bước" để bắt đầu.</div>
+      </div>
+      <div class="status" id="simStatus">Chọn kịch bản rồi bấm "Từng bước" hoặc "Chạy tự động".</div>
+    </div>
+  </div>
+
+<script>
+  // ===================== PHẦN 1: click segment để highlight =====================
+  document.querySelectorAll('.seg').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.seg').forEach(s => s.classList.remove('hl'));
+      el.classList.add('hl');
+    });
+  });
+
+  // ===================== PHẦN 2: phân loại biến =====================
+  const variables = [
+    {
+      code: 'static int counter = 0;',
+      seg: 'Data',
+      explain: '<b>Data segment.</b> Biến <code class="inline">static</code> (hoặc global) và đã được khởi tạo giá trị cụ thể (0) ngay tại khai báo → lưu trong Data segment với giá trị đó sẵn trong file thực thi.'
+    },
+    {
+      code: 'static int total;',
+      seg: 'BSS',
+      explain: '<b>BSS segment.</b> Biến <code class="inline">static</code>/global nhưng <u>không khởi tạo giá trị</u> → mặc định bằng 0. Hệ điều hành chỉ cần cấp vùng nhớ và điền 0 lúc chạy, không cần lưu giá trị trong file → tiết kiệm dung lượng.'
+    },
+    {
+      code: 'void Square(int x) { ... }',
+      seg: 'Text',
+      explain: '<b>Text segment.</b> Đây là mã lệnh (thân hàm) đã biên dịch — nằm trong vùng chỉ đọc (read-only) để chương trình không thể vô tình ghi đè lên chính mã đang chạy.'
+    },
+    {
+      code: 'int result = x * x; // trong thân hàm',
+      seg: 'Stack',
+      explain: '<b>Stack.</b> Biến cục bộ khai báo trong hàm được đặt trong <i>stack frame</i> của lần gọi hàm đó — chỉ tồn tại trong lúc hàm đang chạy, bị hủy ngay khi hàm <code class="inline">return</code>.'
+    },
+    {
+      code: 'int[] arr = new int[100];',
+      seg: 'Heap (con trỏ trên Stack)',
+      explain: '<b>Heap + Stack.</b> Vùng nhớ 100 số nguyên được cấp phát <u>động</u> trên Heap (vì dùng <code class="inline">new</code>) — tồn tại cho đến khi được giải phóng/không còn tham chiếu. Riêng biến <code class="inline">arr</code> (con trỏ trỏ tới vùng đó) là một biến cục bộ, nên bản thân nó nằm trên Stack.'
+    },
+    {
+      code: 'Node head = new Node(5);',
+      seg: 'Heap (con trỏ trên Stack)',
+      explain: '<b>Heap + Stack.</b> Giống danh sách liên kết ở chủ đề 24 — mỗi <code class="inline">Node</code> được cấp phát trên Heap nên vẫn tồn tại kể cả khi hàm tạo ra nó đã kết thúc, miễn còn tham chiếu nào trỏ tới nó. Biến <code class="inline">head</code> (tham chiếu) nằm trên Stack.'
+    },
+  ];
+
+  const varBtns = document.getElementById('varBtns');
+  const varExplain = document.getElementById('varExplain');
+  variables.forEach((v, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'var-btn';
+    btn.textContent = v.code;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.var-btn').forEach(b => b.classList.remove('chosen'));
+      btn.classList.add('chosen');
+      varExplain.innerHTML = `→ <b>${v.seg}</b><br>${v.explain}`;
+    });
+    varBtns.appendChild(btn);
+  });
+
+  // ===================== PHẦN 3: mô phỏng stack frame =====================
+  const scenarioSelect = document.getElementById('scenarioSelect');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetSimBtn = document.getElementById('resetSimBtn');
+  const stackView = document.getElementById('stackView');
+  const simStatus = document.getElementById('simStatus');
+
+  const MAX_FRAMES = 8; // giới hạn giả lập để minh họa Stack Overflow
+
+  function buildScenario(name) {
+    // Mỗi bước: { type: 'push'|'pop'|'overflow', fn, vars, text }
+    const steps = [];
+    if (name === 'nested') {
+      steps.push({ type: 'push', fn: 'Main()', vars: ['a = 5', 'b = ?'], text: 'Gọi Main() — push stack frame của Main.' });
+      steps.push({ type: 'push', fn: 'A(a)', vars: ['x = 5'], text: 'Main gọi A(a) — push stack frame của A lên trên Main.' });
+      steps.push({ type: 'push', fn: 'B(x)', vars: ['y = 25'], text: 'A gọi B(x) — push stack frame của B lên trên A.' });
+      steps.push({ type: 'pop', fn: 'B(x)', text: 'B return — pop stack frame của B. Quay lại A.' });
+      steps.push({ type: 'pop', fn: 'A(a)', text: 'A return — pop stack frame của A. Quay lại Main.' });
+      steps.push({ type: 'pop', fn: 'Main()', text: 'Main kết thúc — pop stack frame cuối cùng. Stack rỗng.' });
+    } else if (name === 'recursion') {
+      [4, 3, 2, 1].forEach(n => {
+        steps.push({ type: 'push', fn: `Factorial(${n})`, vars: [`n = ${n}`], text: `Gọi đệ quy Factorial(${n}) — push thêm 1 stack frame.` });
+      });
+      steps.push({ type: 'note', text: 'Chạm điều kiện dừng Factorial(1) = 1. Bắt đầu pop dần và nhân kết quả.' });
+      [1, 2, 3, 4].forEach(n => {
+        steps.push({ type: 'pop', fn: `Factorial(${n})`, text: `Factorial(${n}) return — pop stack frame, nhân kết quả với ${n}.` });
+      });
+    } else if (name === 'overflow') {
+      for (let i = 1; i <= MAX_FRAMES + 2; i++) {
+        if (i <= MAX_FRAMES) {
+          steps.push({ type: 'push', fn: `Loop(${i})`, vars: [`i = ${i}`], text: `Đệ quy không có điều kiện dừng — push stack frame thứ ${i}.` });
+        } else {
+          steps.push({ type: 'overflow', text: 'Vượt quá kích thước Stack cho phép → StackOverflowException / Segmentation Fault!' });
+          break;
+        }
+      }
+    }
+    return steps;
+  }
+
+  let steps = [];
+  let stepPos = 0;
+  let liveStack = [];
+  let done = false;
+  let autoTimer = null;
+
+  function renderStack() {
+    stackView.innerHTML = '';
+    if (liveStack.length === 0) {
+      stackView.innerHTML = '<div class="empty-note">Stack rỗng.</div>';
+      return;
+    }
+    liveStack.forEach((frame, idx) => {
+      const div = document.createElement('div');
+      div.className = 'frame' + (idx === liveStack.length - 1 ? ' top' : '');
+      div.innerHTML = `<div class="fn-name">${frame.fn}</div>` +
+        (frame.vars ? frame.vars.map(v => `<div class="line">${v}</div>`).join('') : '');
+      stackView.appendChild(div);
+    });
+  }
+
+  function setStatus(text, kind) {
+    simStatus.textContent = text;
+    simStatus.className = 'status' + (kind === 'done' ? ' done' : kind === 'warn' ? ' warn' : '');
+  }
+
+  function resetSim() {
+    stopAuto();
+    steps = buildScenario(scenarioSelect.value);
+    stepPos = 0;
+    liveStack = [];
+    done = false;
+    renderStack();
+    setStatus('Chọn kịch bản rồi bấm "Từng bước" hoặc "Chạy tự động".');
+    stepBtn.disabled = false;
+    runBtn.disabled = false;
+  }
+
+  function doStep() {
+    if (done || stepPos >= steps.length) return;
+    const s = steps[stepPos];
+    if (s.type === 'push') {
+      liveStack.push({ fn: s.fn, vars: s.vars });
+    } else if (s.type === 'pop') {
+      liveStack.pop();
+    } else if (s.type === 'overflow') {
+      setStatus(s.text, 'warn');
+      done = true;
+      stopAuto();
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+      renderStack();
+      stepPos++;
+      return;
+    }
+    renderStack();
+    setStatus(s.text);
+    stepPos++;
+    if (stepPos >= steps.length) {
+      done = true;
+      stopAuto();
+      setStatus('Hoàn tất mô phỏng — Stack đã trở về trạng thái ban đầu.', 'done');
+      stepBtn.disabled = true;
+      runBtn.disabled = true;
+    }
+  }
+
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  }
+
+  function runAuto() {
+    stopAuto();
+    autoTimer = setInterval(() => {
+      doStep();
+      if (done) stopAuto();
+    }, 650);
+  }
+
+  scenarioSelect.addEventListener('change', resetSim);
+  stepBtn.addEventListener('click', doStep);
+  runBtn.addEventListener('click', runAuto);
+  resetSimBtn.addEventListener('click', resetSim);
+
+  resetSim();
+</script>
+</body>
+</html>

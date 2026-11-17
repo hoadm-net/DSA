@@ -64,4 +64,7 @@ Kết quả: 5
 
 ## Demo
 
-Xem file [demo.html](./demo.html) — nhập biểu thức Infix (các token cách nhau bởi khoảng trắng), chạy từng bước để xem quá trình chuyển sang Postfix bằng Stack toán tử, sau đó tính giá trị Postfix bằng Stack toán hạng.
+Demo chia làm 2 file (các token cách nhau bởi khoảng trắng):
+
+- [stage_1.html](./stage_1.html) — nhập biểu thức Infix, chạy từng bước để xem quá trình chuyển sang Postfix bằng Stack toán tử. Khi xong có nút mang chuỗi Postfix sang Stage 2.
+- [stage_2.html](./stage_2.html) — nhập (hoặc nhận từ Stage 1) chuỗi Postfix, chạy từng bước để tính giá trị bằng Stack toán hạng.

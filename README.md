@@ -79,6 +79,9 @@ Mục lục dưới đây nhóm theo 12 buổi học chính thức, cộng thêm
 - [Bảng băm (Hash Table): hàm băm, xử lý đụng độ](./48-hash-table/)
 - [Cây nhiều nhánh (B-Tree): cấu trúc & xây dựng](./49-b-tree/)
 
+## Phụ lục
+- [A1. Bố cục bộ nhớ của một chương trình (Text/Data/BSS/Heap/Stack)](./appendix-a1-memory-layout/)
+
 ---
 
 Tiến độ soạn nội dung được theo dõi trong skill [`dsa-course`](./.claude/skills/dsa-course/SKILL.md).

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Demo Infix ↔ Postfix bằng Stack</title>
+<title>Stage 2: Tính giá trị Postfix</title>
 <style>
   :root {
     --bg: #f7f7fb;
@@ -26,6 +26,7 @@
   }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .subtitle a { color: var(--accent); }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -49,7 +50,7 @@
     width: 100%;
     font-family: ui-monospace, monospace;
   }
-  .field { min-width: 320px; flex: 2; }
+  .field { min-width: 260px; flex: 2; }
   button {
     padding: 8px 14px;
     border-radius: 6px;
@@ -80,7 +81,8 @@
     border: 2px solid var(--border); border-top: none; height: 40px;
     font-family: ui-monospace, monospace; font-weight: 700; background: #fff;
   }
-  .stack-visual .stack-slot:first-child { border-top: 2px solid var(--border); }
+  /* column-reverse: phần tử cuối nằm trên cùng nên cần viền trên */
+  .stack-visual .stack-slot:last-child { border-top: 2px solid var(--border); }
   .stack-slot.top { border-color: var(--key); background: #e7f0ff; }
   .stack-empty { font-size: 0.78rem; color: var(--muted); border: 2px dashed var(--border); border-radius: 6px; padding: 10px; text-align:center; width: 90px; }
   .result-banner {
@@ -88,17 +90,19 @@
     background: #d3f9d8; border-radius: 10px;
   }
   .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 14px; }
+  .status.ok { background: #d3f9d8; color: #2b8a3e; }
+  .status.error { background: #ffe3e3; color: #c92a2a; }
 </style>
 </head>
 <body>
-  <h1>Ứng dụng Stack: Infix → Postfix → Tính giá trị</h1>
-  <p class="subtitle">Chuyển đổi biểu thức trung tố sang hậu tố bằng Stack toán tử, rồi tính giá trị hậu tố bằng Stack toán hạng.</p>
+  <h1>Stage 2: Tính giá trị Postfix bằng Stack</h1>
+  <p class="subtitle">Duyệt chuỗi hậu tố từ trái sang phải: gặp toán hạng thì đẩy vào Stack, gặp toán tử thì lấy 2 toán hạng ra tính rồi đẩy kết quả lại. Bước trước: <a href="stage_1.html">Stage 1 – Chuyển Infix → Postfix</a>.</p>
 
   <div class="panel">
     <div class="controls-row">
       <div class="field">
-        <label>Biểu thức Infix (mỗi token cách nhau bởi khoảng trắng)</label>
-        <input type="text" id="exprInput" value="3 + 4 * 2 - ( 1 + 5 ) / 2">
+        <label>Biểu thức Postfix (mỗi token cách nhau bởi khoảng trắng)</label>
+        <input type="text" id="exprInput" value="3 4 2 * + 1 5 + 2 / -">
       </div>
       <button class="primary" id="initBtn">Bắt đầu</button>
     </div>
@@ -122,71 +126,37 @@
   const speedSlider = document.getElementById('speedSlider');
   const workPanel = document.getElementById('workPanel');
 
-  const PREC = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 3 };
+  const OPS = ['+', '-', '*', '/', '^'];
   const isOperand = t => /^[0-9]+(\.[0-9]+)?$/.test(t);
 
   let tokens = [];
   let steps = [];
   let stepPos = 0;
 
-  let opStack = [];
-  let output = [];
   let evalStack = [];
   let currentReadIndex = -1;
-  let stage = 'convert';
   let finalResult = null;
+  let done = false;
   let statusText = '';
   let statusKind = '';
   let busy = false;
 
-  // ---- Giải thuật: sinh danh sách các bước cho cả 2 giai đoạn ----
+  // ---- Giải thuật: sinh danh sách các bước tính giá trị Postfix ----
+  // Postfix nhập tay có thể sai, nên gặp lỗi thì dừng bằng một bước 'error'.
   function simulate(toks) {
     const steps = [];
-    const opSt = [];
-    const out = [];
-
+    const evalSt = [];
     for (let i = 0; i < toks.length; i++) {
       const t = toks[i];
-      steps.push({ phase: 'convert', type: 'read', index: i, text: `Đọc token "${t}".` });
-      if (isOperand(t)) {
-        out.push(t);
-        steps.push({ phase: 'convert', type: 'outputPush', token: t, text: `"${t}" là toán hạng → đưa vào cuối chuỗi postfix.` });
-      } else if (t === '(') {
-        opSt.push(t);
-        steps.push({ phase: 'convert', type: 'opPush', token: t, text: `"(" → đẩy vào ngăn xếp toán tử.` });
-      } else if (t === ')') {
-        while (opSt.length && opSt[opSt.length - 1] !== '(') {
-          const op = opSt.pop();
-          out.push(op);
-          steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Lấy "${op}" từ ngăn xếp đưa vào postfix (đang tìm dấu "(").` });
-        }
-        opSt.pop();
-        steps.push({ phase: 'convert', type: 'discardParen', text: `Gặp "(" tương ứng → loại khỏi ngăn xếp (không đưa vào postfix).` });
-      } else {
-        while (opSt.length && opSt[opSt.length - 1] !== '(' && PREC[opSt[opSt.length - 1]] >= PREC[t]) {
-          const op = opSt.pop();
-          out.push(op);
-          steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Đỉnh ngăn xếp "${op}" có độ ưu tiên ≥ "${t}" → lấy ra đưa vào postfix.` });
-        }
-        opSt.push(t);
-        steps.push({ phase: 'convert', type: 'opPush', token: t, text: `Đẩy "${t}" vào ngăn xếp toán tử.` });
-      }
-    }
-    while (opSt.length) {
-      const op = opSt.pop();
-      out.push(op);
-      steps.push({ phase: 'convert', type: 'opPopToOutput', token: op, text: `Hết chuỗi vào → lấy nốt "${op}" từ ngăn xếp đưa vào postfix.` });
-    }
-    steps.push({ phase: 'convert', type: 'convertDone', text: `Hoàn tất chuyển đổi. Postfix: ${out.join(' ')}` });
-
-    const evalSt = [];
-    for (let i = 0; i < out.length; i++) {
-      const t = out[i];
-      steps.push({ phase: 'evaluate', type: 'read', index: i, text: `Đọc token "${t}" trong chuỗi postfix.` });
+      steps.push({ type: 'read', index: i, text: `Đọc token "${t}" trong chuỗi postfix.` });
       if (isOperand(t)) {
         evalSt.push(Number(t));
-        steps.push({ phase: 'evaluate', type: 'push', value: Number(t), text: `"${t}" là toán hạng → đẩy vào ngăn xếp toán hạng.` });
-      } else {
+        steps.push({ type: 'push', value: Number(t), text: `"${t}" là toán hạng → đẩy vào ngăn xếp toán hạng.` });
+      } else if (OPS.includes(t)) {
+        if (evalSt.length < 2) {
+          steps.push({ type: 'error', text: `Lỗi: gặp toán tử "${t}" nhưng ngăn xếp chỉ có ${evalSt.length} toán hạng (cần 2). Postfix không hợp lệ.` });
+          return steps;
+        }
         const b = evalSt.pop();
         const a = evalSt.pop();
         let r;
@@ -197,12 +167,19 @@
           case '/': r = a / b; break;
           case '^': r = Math.pow(a, b); break;
         }
-        steps.push({ phase: 'evaluate', type: 'pop2', a, b, op: t, text: `Gặp toán tử "${t}" → lấy 2 toán hạng ${b} rồi ${a} ra khỏi ngăn xếp.` });
+        steps.push({ type: 'pop2', text: `Gặp toán tử "${t}" → lấy 2 toán hạng ${b} rồi ${a} ra khỏi ngăn xếp.` });
         evalSt.push(r);
-        steps.push({ phase: 'evaluate', type: 'push', value: r, text: `Tính ${a} ${t} ${b} = ${r} → đẩy kết quả vào ngăn xếp.` });
+        steps.push({ type: 'push', value: r, text: `Tính ${a} ${t} ${b} = ${r} → đẩy kết quả vào ngăn xếp.` });
+      } else {
+        steps.push({ type: 'error', text: `Lỗi: token "${t}" không phải số hay toán tử hợp lệ (+ - * / ^).` });
+        return steps;
       }
     }
-    steps.push({ phase: 'evaluate', type: 'evalDone', text: `Hoàn tất tính giá trị. Kết quả cuối cùng = ${evalSt[0]}.` });
+    if (evalSt.length !== 1) {
+      steps.push({ type: 'error', text: `Lỗi: hết chuỗi nhưng ngăn xếp còn ${evalSt.length} phần tử (phải đúng 1). Postfix không hợp lệ.` });
+      return steps;
+    }
+    steps.push({ type: 'done', text: `Hoàn tất tính giá trị. Kết quả cuối cùng = ${evalSt[0]}.` });
     return steps;
   }
 
@@ -229,16 +206,12 @@
 
   function render() {
     let html = '';
-    if (stage === 'convert') {
-      html += '<div class="stage-label">Giai đoạn 1: Chuyển Infix → Postfix</div>';
-      html += renderTokenRow('Chuỗi vào (Infix)', tokens, currentReadIndex);
-      html += `<div class="stack-row">${renderStackCol('Ngăn xếp toán tử', opStack, true)}<div style="flex:1;">${renderTokenRow('Postfix đang xây dựng', output, -1)}</div></div>`;
-    } else if (stage === 'evaluate') {
-      html += '<div class="stage-label">Giai đoạn 2: Tính giá trị Postfix</div>';
-      html += renderTokenRow('Chuỗi Postfix', output, currentReadIndex);
+    if (!done) {
+      html += '<div class="stage-label">Stage 2: Tính giá trị Postfix</div>';
+      html += renderTokenRow('Chuỗi Postfix', tokens, currentReadIndex);
       html += `<div class="stack-row">${renderStackCol('Ngăn xếp toán hạng', evalStack, true)}</div>`;
-    } else if (stage === 'result') {
-      html += renderTokenRow('Chuỗi Postfix', output, -1);
+    } else {
+      html += renderTokenRow('Chuỗi Postfix', tokens, -1);
       html += `<div class="result-banner">Kết quả = ${finalResult}</div>`;
     }
     workPanel.innerHTML = html;
@@ -250,40 +223,28 @@
   }
 
   function applyStep(s) {
-    if (s.phase === 'convert') {
-      switch (s.type) {
-        case 'read': currentReadIndex = s.index; break;
-        case 'outputPush': output.push(s.token); break;
-        case 'opPush': opStack.push(s.token); break;
-        case 'opPopToOutput': opStack.pop(); output.push(s.token); break;
-        case 'discardParen': opStack.pop(); break;
-        case 'convertDone': stage = 'evaluate'; currentReadIndex = -1; break;
-      }
-    } else {
-      switch (s.type) {
-        case 'read': currentReadIndex = s.index; break;
-        case 'push': evalStack.push(s.value); break;
-        case 'pop2': evalStack.pop(); evalStack.pop(); break;
-        case 'evalDone':
-          finalResult = evalStack[0];
-          stage = 'result';
-          break;
-      }
+    switch (s.type) {
+      case 'read': currentReadIndex = s.index; break;
+      case 'push': evalStack.push(s.value); break;
+      case 'pop2': evalStack.pop(); evalStack.pop(); break;
+      case 'done':
+        finalResult = evalStack[0];
+        done = true;
+        break;
     }
   }
 
   function initAll() {
+    stopAuto();
     tokens = exprInput.value.trim().split(/\s+/).filter(Boolean);
     steps = simulate(tokens);
     stepPos = 0;
-    opStack = [];
-    output = [];
     evalStack = [];
     currentReadIndex = -1;
-    stage = 'convert';
     finalResult = null;
+    done = false;
     busy = true;
-    statusText = `Sẵn sàng xử lý biểu thức gồm ${tokens.length} token.`;
+    statusText = `Sẵn sàng tính chuỗi postfix gồm ${tokens.length} token.`;
     statusKind = '';
     render();
     stepBtn.disabled = false;
@@ -295,10 +256,10 @@
     const s = steps[stepPos];
     applyStep(s);
     statusText = s.text;
-    statusKind = (s.type === 'evalDone') ? 'ok' : '';
+    statusKind = s.type === 'done' ? 'ok' : s.type === 'error' ? 'error' : '';
     render();
     stepPos++;
-    if (s.type === 'evalDone') {
+    if (s.type === 'done' || s.type === 'error') {
       busy = false;
       stopAuto();
       stepBtn.disabled = true;
@@ -319,6 +280,10 @@
   initBtn.addEventListener('click', initAll);
   stepBtn.addEventListener('click', step);
   runBtn.addEventListener('click', runAuto);
+
+  // Nếu mở từ Stage 1 thì nhận sẵn chuỗi postfix qua ?postfix=...
+  const fromStage1 = new URLSearchParams(location.search).get('postfix');
+  if (fromStage1) exprInput.value = fromStage1;
 
   initAll();
 </script>

@@ -158,6 +158,12 @@
     flashIndex = 0;
     render();
     setStatus(`Push(${v}) → tạo node mới, newNode.Next = head cũ, head = newNode.`, 'ok');
+    // Gợi ý sẵn giá trị ngẫu nhiên cho lần Push tiếp theo (vẫn sửa tay được)
+    valueInput.value = randomValue();
+  }
+
+  function randomValue() {
+    return String(Math.floor(Math.random() * 99) + 1);
   }
 
   function pop() {
@@ -195,6 +201,8 @@
   popBtn.addEventListener('click', pop);
   topBtn.addEventListener('click', peek);
   resetBtn.addEventListener('click', reset);
+  // Bấm vào ô là chọn hết, gõ đè luôn cho nhanh
+  valueInput.addEventListener('focus', () => valueInput.select());
 
   render();
 </script>

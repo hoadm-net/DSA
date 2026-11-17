@@ -56,3 +56,9 @@ Thứ tự hoàn tất: P2 (t=6), P1 (t=11), P3 (t=16)
 ## Demo
 
 Xem file [demo.html](./demo.html) — nhập danh sách tiến trình và quantum, chạy từng bước để xem hàng đợi luân phiên, CPU đang xử lý tiến trình nào, và biểu đồ Gantt được xây dựng dần theo giải thuật Round-Robin.
+
+## Demo bổ sung
+
+- [palindrome.html](./palindrome.html) — kiểm tra chuỗi palindrome bằng cách dùng đồng thời Stack và Queue: pop (cuối → đầu) so với dequeue (đầu → cuối).
+- [josephus.html](./josephus.html) — bài toán Josephus / "chuyền khoai nóng": mô phỏng vòng tròn bằng Queue (dequeue + enqueue để chuyền, dequeue để loại).
+- [water-jug.html](./water-jug.html) — bài toán đong nước (bình 3 lít và 5 lít, cần 4 lít): trạng thái (a, b), 6 thao tác, BFS bằng Queue + tập visited để tìm lời giải ít bước nhất (6 bước).

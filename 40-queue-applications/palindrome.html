@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo: kiểm tra palindrome bằng Stack + Queue</title>
+<style>
+  :root { --bg:#f7f7fb; --panel:#fff; --text:#1f2430; --muted:#6b7280; --border:#e2e4ea; --accent:#3b5bdb; --ok:#2f9e44; --bad:#e03131; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .subtitle { color:var(--muted); margin:0 0 20px; font-size:.95rem; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin-bottom:16px; }
+  .controls-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:8px; }
+  .field { min-width:260px; flex:2; }
+  .field label { display:block; font-size:.82rem; color:var(--muted); margin-bottom:4px; }
+  .field input { padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:.9rem; width:100%; }
+  button { padding:8px 14px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-size:.88rem; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .speed-row { display:flex; align-items:center; gap:8px; font-size:.85rem; color:var(--muted); }
+  .row-title { font-size:.82rem; color:var(--muted); margin-bottom:6px; font-weight:600; }
+  .cells { display:flex; gap:6px; flex-wrap:wrap; min-height:42px; margin-bottom:16px; }
+  .cell { width:38px; height:38px; display:flex; align-items:center; justify-content:center; border:2px solid var(--border); border-radius:6px; font-weight:700; background:#fff; }
+  .cell.hl { border-color:var(--accent); background:#e7f0ff; }
+  .cell.match { border-color:var(--ok); background:#d3f9d8; }
+  .cell.mismatch { border-color:var(--bad); background:#ffe3e3; }
+  .stack { display:flex; flex-direction:row; gap:6px; }
+  .status { font-size:.95rem; padding:10px 12px; border-radius:8px; background:#f1f3f5; min-height:20px; margin-top:10px; }
+  .status.ok { background:#d3f9d8; color:#2b8a3e; }
+  .status.bad { background:#ffe3e3; color:#c92a2a; }
+</style>
+</head>
+<body>
+  <h1>Kiểm tra palindrome bằng Stack + Queue</h1>
+  <p class="subtitle">Đưa từng ký tự vào cả Stack (push) và Queue (enqueue). Sau đó pop và dequeue đồng thời: Stack cho ký tự cuối → đầu, Queue cho ký tự đầu → cuối. Nếu mọi cặp đều bằng nhau thì là palindrome.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Chuỗi cần kiểm tra (bỏ qua khoảng trắng, dấu câu và hoa/thường)</label>
+        <input type="text" id="strInput" value="A man, a plan, a canal: Panama">
+      </div>
+      <button class="primary" id="initBtn">Bắt đầu</button>
+    </div>
+    <div class="controls-row">
+      <button id="stepBtn">Từng bước</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">Tốc độ: <input type="range" id="speed" min="100" max="1200" value="450" step="50"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row-title">Chuỗi đã chuẩn hóa</div>
+    <div class="cells" id="srcRow"></div>
+    <div class="row-title">Stack (đỉnh bên phải — pop lấy từ đây)</div>
+    <div class="cells stack" id="stackRow"></div>
+    <div class="row-title">Queue (front bên trái — dequeue lấy từ đây)</div>
+    <div class="cells" id="queueRow"></div>
+    <div class="status" id="statusBox">Nhập chuỗi rồi nhấn "Bắt đầu".</div>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let text = [], stack = [], queue = [], phase = 'idle', idx = 0, timer = null, hl = null;
+
+  function normalize(s) { return [...s.toLowerCase()].filter(c => /[\p{L}\p{N}]/u.test(c)); }
+
+  function cells(el, arr, cls) {
+    el.innerHTML = '';
+    arr.forEach((c, i) => {
+      const d = document.createElement('div');
+      d.className = 'cell' + (cls && cls[i] ? ' ' + cls[i] : '');
+      d.textContent = c;
+      el.appendChild(d);
+    });
+  }
+
+  function render() {
+    const srcCls = text.map((_, i) => (phase === 'push' && i === idx - 1 ? 'hl' : ''));
+    cells($('srcRow'), text, srcCls);
+    cells($('stackRow'), stack, hl && stack.map((_, i) => (i === stack.length - 1 ? hl : '')));
+    cells($('queueRow'), queue, hl && queue.map((_, i) => (i === 0 ? hl : '')));
+  }
+
+  function status(msg, cls) { $('statusBox').textContent = msg; $('statusBox').className = 'status' + (cls ? ' ' + cls : ''); }
+
+  function init() {
+    stop();
+    text = normalize($('strInput').value);
+    stack = []; queue = []; idx = 0; hl = null;
+    if (!text.length) { phase = 'idle'; render(); status('Chuỗi rỗng — hãy nhập ít nhất một ký tự chữ hoặc số.'); return; }
+    phase = 'push';
+    render();
+    status(`Chuẩn hóa: "${text.join('')}" (${text.length} ký tự). Bắt đầu push/enqueue.`);
+  }
+
+  function step() {
+    if (phase === 'idle' || phase === 'done') return false;
+    if (phase === 'push') {
+      const c = text[idx++];
+      stack.push(c); queue.push(c); hl = null;
+      status(`push('${c}') vào Stack và enqueue('${c}') vào Queue.`);
+      if (idx === text.length) { phase = 'compare'; idx = 0; }
+      render();
+      return true;
+    }
+    const a = stack[stack.length - 1], b = queue[0];
+    if (a === b) {
+      hl = 'match'; render();
+      stack.pop(); queue.shift();
+      status(`pop() = '${a}', dequeue() = '${b}' → bằng nhau.`);
+      if (!stack.length) {
+        phase = 'done'; status('Mọi cặp đều khớp → ĐÂY LÀ palindrome.', 'ok');
+      }
+    } else {
+      hl = 'mismatch'; render();
+      phase = 'done';
+      status(`pop() = '${a}', dequeue() = '${b}' → khác nhau → KHÔNG phải palindrome.`, 'bad');
+    }
+    return true;
+  }
+
+  function stop() { clearInterval(timer); timer = null; $('runBtn').textContent = 'Chạy tự động'; }
+
+  $('initBtn').onclick = init;
+  $('stepBtn').onclick = () => { stop(); step(); };
+  $('runBtn').onclick = () => {
+    if (timer) { stop(); return; }
+    $('runBtn').textContent = 'Tạm dừng';
+    timer = setInterval(() => { if (!step()) stop(); }, +$('speed').value);
+  };
+  $('speed').oninput = () => { if (timer) { clearInterval(timer); timer = setInterval(() => { if (!step()) stop(); }, +$('speed').value); } };
+  init();
+</script>
+</body>
+</html>

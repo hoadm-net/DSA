@@ -69,4 +69,5 @@ Khử đệ quy **không làm thay đổi độ phức tạp thời gian/không 
 
 ## Demo
 
-Xem file [demo.html](./demo.html) — chọn số đĩa, chạy từng bước để xem Stack tường minh được đẩy/lấy ra như thế nào, đối chiếu với 3 cọc Tháp Hà Nội và nhật ký các bước di chuyển được sinh ra.
+- [callstack.html](./callstack.html) — xem trước: call stack **ẩn** hoạt động thế nào khi các hàm gọi nhau (giai thừa, Fibonacci, 3 hàm gọi nhau, isEven ↔ isOdd gọi qua lại). Chạy từng bước để thấy dòng code đang chạy, frame được đẩy/lấy ra và giá trị trả về được đưa ngược cho hàm gọi.
+- [demo.html](./demo.html) — chọn số đĩa, chạy từng bước để xem Stack tường minh được đẩy/lấy ra như thế nào, đối chiếu với 3 cọc Tháp Hà Nội và nhật ký các bước di chuyển được sinh ra.

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo Call Stack</title>
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --panel: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e4ea;
+    --accent: #3b5bdb;
+    --current: #f08c00;
+    --key: #1971c2;
+    --sorted: #2f9e44;
+    --ret: #ae3ec9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  .subtitle a { color: var(--accent); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+  }
+  .field label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .field select, .field input[type="number"] {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: #fff;
+  }
+  .field input[type="number"] { width: 80px; }
+  button {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.88rem;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .speed-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); }
+  .hint { font-size: 0.8rem; color: var(--muted); }
+
+  .work { display: grid; grid-template-columns: minmax(260px, 1.1fr) minmax(220px, 0.9fr) minmax(220px, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .work { grid-template-columns: 1fr; } }
+  .work .panel { margin-bottom: 0; }
+  .row-title { font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+
+  /* Code */
+  .code-block { font-family: ui-monospace, monospace; font-size: 0.85rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .code-line { display: flex; padding: 3px 0; white-space: pre; }
+  .code-line .ln { width: 28px; text-align: right; padding-right: 10px; color: var(--muted); flex-shrink: 0; user-select: none; }
+  .code-line.active { background: #fff3bf; box-shadow: inset 3px 0 0 var(--current); }
+  .code-line.paused { background: #f1f3f5; box-shadow: inset 3px 0 0 #adb5bd; }
+
+  /* Call stack */
+  .stack-visual { display: flex; flex-direction: column-reverse; gap: 6px; }
+  .frame {
+    border: 2px solid var(--border); border-radius: 8px; padding: 8px 10px; background: #fff;
+    font-family: ui-monospace, monospace; font-size: 0.82rem;
+  }
+  .frame .sig { font-weight: 700; font-size: 0.9rem; }
+  .frame .locals { color: var(--muted); margin-top: 3px; }
+  .frame .locals b { color: var(--text); }
+  .frame .wait { margin-top: 3px; color: #868e96; font-size: 0.76rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .frame.top { border-color: var(--current); background: #fff9db; }
+  .stack-bottom { text-align: center; font-size: 0.74rem; color: var(--muted); border-top: 2px solid var(--muted); padding-top: 4px; margin-top: 4px; }
+  .stack-empty { font-size: 0.8rem; color: var(--muted); border: 2px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+  .return-chip {
+    display: inline-block; margin-bottom: 8px; padding: 4px 10px; border-radius: 999px;
+    background: #f3d9fa; color: var(--ret); font-family: ui-monospace, monospace; font-size: 0.82rem; font-weight: 700;
+  }
+  .stats { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+
+  /* Trace */
+  .trace { font-family: ui-monospace, monospace; font-size: 0.8rem; max-height: 420px; overflow-y: auto; }
+  .trace-item { padding: 2px 4px; border-radius: 4px; white-space: nowrap; }
+  .trace-item.call { color: var(--key); }
+  .trace-item.ret { color: var(--ret); }
+  .trace-item.latest { background: #fff3bf; }
+
+  .result-banner {
+    text-align: center; padding: 16px; font-size: 1.3rem; font-weight: 800; color: var(--sorted);
+    background: #d3f9d8; border-radius: 10px; margin-top: 14px;
+  }
+  .status { font-size: 0.95rem; padding: 10px 12px; border-radius: 8px; background: #f1f3f5; min-height: 20px; margin-top: 14px; }
+  .status.call { background: #e7f0ff; color: var(--key); }
+  .status.ret { background: #f3d9fa; color: #862e9c; }
+  .status.ok { background: #d3f9d8; color: #2b8a3e; }
+</style>
+</head>
+<body>
+  <h1>Call Stack: các hàm gọi nhau như thế nào?</h1>
+  <p class="subtitle">Mỗi lời gọi hàm đẩy một <b>frame</b> (tham số + biến cục bộ + chỗ đang dừng) lên đỉnh call stack; khi hàm <code>return</code>, frame bị lấy ra và giá trị trả về được đưa ngược cho hàm gọi nó. Xem thêm: <a href="demo.html">khử đệ quy Tháp Hà Nội bằng Stack tường minh</a>.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="field">
+        <label>Ví dụ</label>
+        <select id="exampleSelect"></select>
+      </div>
+      <div class="field">
+        <label id="nLabel">n</label>
+        <input type="number" id="nInput">
+      </div>
+      <button class="primary" id="initBtn">Bắt đầu</button>
+    </div>
+    <div class="controls-row">
+      <button id="backBtn">◀ Lùi</button>
+      <button id="stepBtn">Từng bước ▶</button>
+      <button id="runBtn">Chạy tự động</button>
+      <div class="speed-row">
+        Tốc độ:
+        <input type="range" id="speedSlider" min="150" max="1500" value="700" step="50">
+      </div>
+      <span class="hint">Phím ← / → để lùi / tiến.</span>
+    </div>
+  </div>
+
+  <div class="work">
+    <div class="panel">
+      <div class="row-title">Mã nguồn (vàng = đang chạy, xám = đang chờ hàm con trả về)</div>
+      <div id="codePanel"></div>
+    </div>
+    <div class="panel">
+      <div class="row-title">Call stack (đỉnh ở trên)</div>
+      <div id="stackPanel"></div>
+    </div>
+    <div class="panel">
+      <div class="row-title">Nhật ký gọi / trả về</div>
+      <div class="trace" id="tracePanel"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px;">
+    <div class="status" id="statusBox" style="margin-top:0;"></div>
+    <div id="resultBox"></div>
+  </div>
+
+<script>
+  const exampleSelect = document.getElementById('exampleSelect');
+  const nInput = document.getElementById('nInput');
+  const nLabel = document.getElementById('nLabel');
+  const initBtn = document.getElementById('initBtn');
+  const backBtn = document.getElementById('backBtn');
+  const stepBtn = document.getElementById('stepBtn');
+  const runBtn = document.getElementById('runBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const codePanel = document.getElementById('codePanel');
+  const stackPanel = document.getElementById('stackPanel');
+  const tracePanel = document.getElementById('tracePanel');
+  const statusBox = document.getElementById('statusBox');
+  const resultBox = document.getElementById('resultBox');
+
+  // Mỗi hàm được viết dưới dạng generator để "chạy chậm" từng dòng:
+  //   yield L(dòng, mô tả, {biến cục bộ mới})  → dừng ở 1 dòng code
+  //   const v = yield C('tênHàm', [đối số])     → gọi hàm con, nhận lại giá trị trả về
+  //   return v                                  → hàm kết thúc, trả v cho hàm gọi
+  const L = (line, text, set) => ({ kind: 'line', line, text, set });
+  const C = (fn, args) => ({ kind: 'call', fn, args });
+
+  const EXAMPLES = {
+    fact: {
+      label: 'Giai thừa — fact(n)',
+      min: 0, max: 8, def: 4,
+      entry: n => ['fact', [n]],
+      funcs: {
+        fact: {
+          params: ['n'], locals: ['r'],
+          code: [
+            'function fact(n) {',
+            '  if (n <= 1) return 1;',
+            '  const r = fact(n - 1);',
+            '  return n * r;',
+            '}',
+          ],
+          *run(n) {
+            yield L(1, `Kiểm tra điều kiện dừng: n <= 1 với n = ${n}.`);
+            if (n <= 1) return 1;
+            yield L(2, `n = ${n} > 1 → cần tính fact(${n - 1}) trước.`);
+            const r = yield C('fact', [n - 1]);
+            yield L(2, `Nhận giá trị trả về: r = ${r}.`, { r });
+            yield L(3, `Tính n * r = ${n} * ${r} = ${n * r}.`);
+            return n * r;
+          },
+        },
+      },
+    },
+
+    fib: {
+      label: 'Fibonacci — fib(n) (gọi đệ quy 2 lần)',
+      min: 0, max: 6, def: 4,
+      entry: n => ['fib', [n]],
+      funcs: {
+        fib: {
+          params: ['n'], locals: ['a', 'b'],
+          code: [
+            'function fib(n) {',
+            '  if (n <= 1) return n;',
+            '  const a = fib(n - 1);',
+            '  const b = fib(n - 2);',
+            '  return a + b;',
+            '}',
+          ],
+          *run(n) {
+            yield L(1, `Kiểm tra điều kiện dừng: n <= 1 với n = ${n}.`);
+            if (n <= 1) return n;
+            yield L(2, `Lời gọi đệ quy thứ 1: cần fib(${n - 1}).`);
+            const a = yield C('fib', [n - 1]);
+            yield L(2, `Nhận a = ${a}.`, { a });
+            yield L(3, `Lời gọi đệ quy thứ 2: cần fib(${n - 2}).`);
+            const b = yield C('fib', [n - 2]);
+            yield L(3, `Nhận b = ${b}.`, { b });
+            yield L(4, `Tính a + b = ${a} + ${b} = ${a + b}.`);
+            return a + b;
+          },
+        },
+      },
+    },
+
+    sumSq: {
+      label: 'Tổng bình phương — 3 hàm gọi nhau',
+      min: 0, max: 5, def: 3,
+      entry: n => ['sumSq', [n]],
+      funcs: {
+        sumSq: {
+          params: ['n'], locals: ['sq', 'rest'],
+          code: [
+            'function sumSq(n) {      // 1² + 2² + ... + n²',
+            '  if (n == 0) return 0;',
+            '  const sq = square(n);',
+            '  const rest = sumSq(n - 1);',
+            '  return sq + rest;',
+            '}',
+          ],
+          *run(n) {
+            yield L(1, `Kiểm tra điều kiện dừng: n == 0 với n = ${n}.`);
+            if (n === 0) return 0;
+            yield L(2, `Cần ${n}² → gọi sang hàm khác: square(${n}).`);
+            const sq = yield C('square', [n]);
+            yield L(2, `Nhận sq = ${sq}.`, { sq });
+            yield L(3, `Cần tổng các bình phương còn lại → gọi sumSq(${n - 1}).`);
+            const rest = yield C('sumSq', [n - 1]);
+            yield L(3, `Nhận rest = ${rest}.`, { rest });
+            yield L(4, `Tính sq + rest = ${sq} + ${rest} = ${sq + rest}.`);
+            return sq + rest;
+          },
+        },
+        square: {
+          params: ['x'], locals: [],
+          code: [
+            'function square(x) {',
+            '  return mul(x, x);',
+            '}',
+          ],
+          *run(x) {
+            yield L(1, `square không tự nhân mà nhờ hàm mul(${x}, ${x}).`);
+            const v = yield C('mul', [x, x]);
+            yield L(1, `mul trả về ${v} → square trả tiếp ${v} lên trên.`);
+            return v;
+          },
+        },
+        mul: {
+          params: ['a', 'b'], locals: [],
+          code: [
+            'function mul(a, b) {',
+            '  return a * b;',
+            '}',
+          ],
+          *run(a, b) {
+            yield L(1, `Tính a * b = ${a} * ${b} = ${a * b}.`);
+            return a * b;
+          },
+        },
+      },
+    },
+
+    evenOdd: {
+      label: 'Chẵn / lẻ — isEven ↔ isOdd gọi qua lại',
+      min: 0, max: 8, def: 4,
+      entry: n => ['isEven', [n]],
+      funcs: {
+        isEven: {
+          params: ['n'], locals: [],
+          code: [
+            'function isEven(n) {',
+            '  if (n == 0) return true;',
+            '  return isOdd(n - 1);',
+            '}',
+          ],
+          *run(n) {
+            yield L(1, `Kiểm tra n == 0 với n = ${n}.`);
+            if (n === 0) return true;
+            yield L(2, `${n} chẵn ⟺ ${n - 1} lẻ → hỏi isOdd(${n - 1}).`);
+            const v = yield C('isOdd', [n - 1]);
+            yield L(2, `isOdd(${n - 1}) = ${v} → isEven(${n}) trả về đúng giá trị đó.`);
+            return v;
+          },
+        },
+        isOdd: {
+          params: ['n'], locals: [],
+          code: [
+            'function isOdd(n) {',
+            '  if (n == 0) return false;',
+            '  return isEven(n - 1);',
+            '}',
+          ],
+          *run(n) {
+            yield L(1, `Kiểm tra n == 0 với n = ${n}.`);
+            if (n === 0) return false;
+            yield L(2, `${n} lẻ ⟺ ${n - 1} chẵn → hỏi isEven(${n - 1}).`);
+            const v = yield C('isEven', [n - 1]);
+            yield L(2, `isEven(${n - 1}) = ${v} → isOdd(${n}) trả về đúng giá trị đó.`);
+            return v;
+          },
+        },
+      },
+    },
+  };
+
+  const sig = (fn, args) => `${fn}(${args.join(', ')})`;
+
+  // ---- Chạy toàn bộ chương trình, chụp lại trạng thái sau mỗi bước ----
+  function simulate(ex, n) {
+    const snaps = [];
+    const frames = [];   // call stack thật sự của trình mô phỏng
+    const trace = [];
+    let maxDepth = 0;
+
+    function snapshot(msg, kind, extra = {}) {
+      maxDepth = Math.max(maxDepth, frames.length);
+      snaps.push({
+        frames: frames.map(f => ({ fn: f.fn, args: f.args, locals: { ...f.locals }, line: f.line, waiting: f.waiting })),
+        trace: trace.slice(),
+        msg, kind, maxDepth,
+        ...extra,
+      });
+    }
+
+    function pushFrame(fn, args) {
+      const def = ex.funcs[fn];
+      frames.push({ fn, args, locals: {}, line: 0, waiting: null, gen: def.run(...args) });
+      trace.push({ depth: frames.length - 1, kind: 'call', text: `→ ${sig(fn, args)}` });
+    }
+
+    const [entryFn, entryArgs] = ex.entry(n);
+    pushFrame(entryFn, entryArgs);
+    snapshot(`Bắt đầu: gọi ${sig(entryFn, entryArgs)} → đẩy frame đầu tiên vào call stack.`, 'call');
+
+    let sendValue;
+    while (frames.length) {
+      const top = frames[frames.length - 1];
+      const res = top.gen.next(sendValue);
+      sendValue = undefined;
+
+      if (res.done) {
+        // Hàm return: lấy frame ra, trả giá trị cho hàm gọi
+        const v = res.value;
+        frames.pop();
+        trace.push({ depth: frames.length, kind: 'ret', text: `← ${sig(top.fn, top.args)} = ${v}` });
+        const lastReturn = { sig: sig(top.fn, top.args), value: v };
+        if (frames.length) {
+          const caller = frames[frames.length - 1];
+          caller.waiting = null;
+          snapshot(`${sig(top.fn, top.args)} trả về ${v} → lấy frame ra khỏi stack, quay lại ${sig(caller.fn, caller.args)} ở dòng ${caller.line + 1}.`, 'ret', { lastReturn });
+          sendValue = v;
+        } else {
+          snapshot(`${sig(top.fn, top.args)} trả về ${v} → call stack rỗng, chương trình kết thúc.`, 'ok', { lastReturn, result: { sig: sig(entryFn, entryArgs), value: v } });
+        }
+      } else if (res.value.kind === 'line') {
+        top.line = res.value.line;
+        Object.assign(top.locals, res.value.set || {});
+        snapshot(res.value.text, '');
+      } else {
+        const { fn, args } = res.value;
+        top.waiting = sig(fn, args);
+        pushFrame(fn, args);
+        snapshot(`${sig(top.fn, top.args)} gọi ${sig(fn, args)} → đẩy frame mới lên đỉnh stack. ${sig(top.fn, top.args)} tạm dừng chờ kết quả.`, 'call');
+      }
+    }
+    return snaps;
+  }
+
+  // ---- Hiển thị ----
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  let ex = null;
+  let snaps = [];
+  let pos = 0;
+
+  function renderCode(snap) {
+    const top = snap.frames[snap.frames.length - 1];
+    let html = '';
+    for (const [name, def] of Object.entries(ex.funcs)) {
+      html += '<div class="code-block">';
+      def.code.forEach((text, i) => {
+        let cls = '';
+        if (top && top.fn === name && top.line === i) cls = 'active';
+        else if (snap.frames.some((f, k) => k < snap.frames.length - 1 && f.fn === name && f.line === i)) cls = 'paused';
+        html += `<div class="code-line ${cls}"><span class="ln">${i + 1}</span>${esc(text)}</div>`;
+      });
+      html += '</div>';
+    }
+    codePanel.innerHTML = html;
+  }
+
+  function renderStack(snap) {
+    let html = '';
+    if (snap.lastReturn) html += `<div class="return-chip">↩ ${esc(snap.lastReturn.sig)} = ${esc(snap.lastReturn.value)}</div>`;
+    if (!snap.frames.length) {
+      html += '<div class="stack-empty">rỗng</div>';
+    } else {
+      const cards = snap.frames.map((f, k) => {
+        const def = ex.funcs[f.fn];
+        const params = def.params.map((p, i) => `${p} = ${f.args[i]}`).join(', ');
+        const locals = def.locals.map(l => `${l} = <b>${l in f.locals ? esc(f.locals[l]) : '?'}</b>`).join(', ');
+        const isTop = k === snap.frames.length - 1;
+        return `
+          <div class="frame ${isTop ? 'top' : ''}">
+            <div class="sig">${f.fn}(${params})</div>
+            ${locals ? `<div class="locals">${locals}</div>` : ''}
+            <div class="wait">${f.waiting ? `dòng ${f.line + 1} · đang chờ ${esc(f.waiting)}` : `đang chạy dòng ${f.line + 1}`}</div>
+          </div>`;
+      }).join('');
+      html += `<div class="stack-visual">${cards}</div><div class="stack-bottom">đáy stack</div>`;
+    }
+    html += `<div class="stats">Số frame hiện tại: ${snap.frames.length} · Độ sâu tối đa đến giờ: ${snap.maxDepth}</div>`;
+    stackPanel.innerHTML = html;
+  }
+
+  function renderTrace(snap) {
+    tracePanel.innerHTML = snap.trace.map((t, i) =>
+      `<div class="trace-item ${t.kind} ${i === snap.trace.length - 1 ? 'latest' : ''}" style="padding-left:${4 + t.depth * 16}px">${esc(t.text)}</div>`
+    ).join('');
+    tracePanel.scrollTop = tracePanel.scrollHeight;
+  }
+
+  function render() {
+    const snap = snaps[pos];
+    renderCode(snap);
+    renderStack(snap);
+    renderTrace(snap);
+    statusBox.textContent = `Bước ${pos + 1}/${snaps.length}: ${snap.msg}`;
+    statusBox.className = 'status' + (snap.kind ? ' ' + snap.kind : '');
+    resultBox.innerHTML = snap.result ? `<div class="result-banner">Kết quả: ${esc(snap.result.sig)} = ${esc(snap.result.value)}</div>` : '';
+    backBtn.disabled = pos === 0;
+    stepBtn.disabled = pos === snaps.length - 1;
+    runBtn.disabled = pos === snaps.length - 1 && !autoTimer;
+  }
+
+  function syncInputs() {
+    ex = EXAMPLES[exampleSelect.value];
+    nInput.min = ex.min;
+    nInput.max = ex.max;
+    nInput.value = ex.def;
+    nLabel.textContent = `n (${ex.min}–${ex.max})`;
+  }
+
+  function initAll() {
+    stopAuto();
+    ex = EXAMPLES[exampleSelect.value];
+    const n = Math.max(ex.min, Math.min(ex.max, parseInt(nInput.value, 10) || ex.def));
+    nInput.value = n;
+    snaps = simulate(ex, n);
+    pos = 0;
+    render();
+  }
+
+  function step() { if (pos < snaps.length - 1) { pos++; render(); } }
+  function back() { if (pos > 0) { pos--; render(); } }
+
+  let autoTimer = null;
+  function stopAuto() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    runBtn.textContent = 'Chạy tự động';
+  }
+  function toggleAuto() {
+    if (autoTimer) { stopAuto(); render(); return; }
+    runBtn.textContent = 'Tạm dừng';
+    autoTimer = setInterval(() => {
+      step();
+      if (pos === snaps.length - 1) { stopAuto(); render(); }
+    }, parseInt(speedSlider.value, 10));
+  }
+
+  for (const [key, e] of Object.entries(EXAMPLES)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = e.label;
+    exampleSelect.appendChild(opt);
+  }
+  exampleSelect.addEventListener('change', () => { syncInputs(); initAll(); });
+  initBtn.addEventListener('click', initAll);
+  stepBtn.addEventListener('click', () => { stopAuto(); step(); });
+  backBtn.addEventListener('click', () => { stopAuto(); back(); });
+  runBtn.addEventListener('click', toggleAuto);
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowRight') { stopAuto(); step(); }
+    if (e.key === 'ArrowLeft') { stopAuto(); back(); }
+  });
+
+  syncInputs();
+  initAll();
+</script>
+</body>
+</html>
